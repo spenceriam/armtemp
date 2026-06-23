@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+  *{ box-sizing:border-box; }
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(140,140,140,.45); border-radius:6px; border:2px solid transparent; background-clip:padding-box; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  @keyframes armPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.55; } }
+</style>
+</helmet>
+
+<div style="{{ rootStyle }}" onClick="{{ closeOverlays }}">
+
+  <!-- wallpaper depth blobs -->
+  <div style="position:absolute; width:60vw; height:60vw; left:-10vw; bottom:-20vw; border-radius:50%; background:var(--wall-blob); filter:blur(40px); pointer-events:none;"></div>
+
+  <!-- desktop demo control cluster -->
+  <div style="position:absolute; top:14px; left:50%; transform:translateX(-50%); display:flex; gap:8px; align-items:center; z-index:60;" onClick="{{ stop }}">
+    <div style="display:flex; align-items:center; gap:2px; padding:3px; background:var(--mica); border:1px solid var(--border-2); border-radius:8px; backdrop-filter:blur(30px) saturate(1.6); box-shadow:0 6px 18px rgba(0,0,0,.18);">
+      <div style="font-size:10.5px; letter-spacing:.4px; color:var(--text-3); padding:0 8px 0 6px; text-transform:uppercase;">Windows theme</div>
+      <div onClick="{{ setLight }}" style="{{ segLight }}">Light</div>
+      <div onClick="{{ setDark }}" style="{{ segDark }}">Dark</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:2px; padding:3px; background:var(--mica); border:1px solid var(--border-2); border-radius:8px; backdrop-filter:blur(30px) saturate(1.6); box-shadow:0 6px 18px rgba(0,0,0,.18);">
+      <div style="font-size:10.5px; letter-spacing:.4px; color:var(--text-3); padding:0 8px 0 6px; text-transform:uppercase;">CPU load</div>
+      <div onClick="{{ setIdle }}" style="{{ segIdle }}">Idle</div>
+      <div onClick="{{ setHeavy }}" style="{{ segHeavy }}">Stress</div>
+    </div>
+  </div>
+
+  <!-- desktop shortcut -->
+  <div onDblClick="{{ openApp }}" onContextMenu="{{ ctxTaskbar }}" style="position:absolute; top:24px; left:24px; width:78px; display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 4px; border-radius:6px; cursor:default; z-index:5;">
+    <div style="width:42px; height:42px; border-radius:9px; background:linear-gradient(150deg, var(--accent), var(--accent-2)); display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,.3); color:#fff;">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none"><rect x="9" y="3" width="6" height="13" rx="3" fill="#fff" opacity=".35"/><rect x="10.5" y="7" width="3" height="9" rx="1.5" fill="#fff"/><circle cx="12" cy="17.5" r="4.2" fill="#fff"/></svg>
+    </div>
+    <div style="font-size:11px; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.7); text-align:center; line-height:1.2;">ARMTEMP</div>
+  </div>
+
+  <!-- ============ MAIN APP WINDOW ============ -->
+  <sc-if value="{{ showApp }}" hint-placeholder-val="{{ true }}">
+    <div onMouseDown="{{ focusApp }}" style="position:absolute; left:{{ win.x }}px; top:{{ win.y }}px; width:564px; max-height:88vh; display:flex; flex-direction:column; transform:scale({{ zoomScale }}); transform-origin:top left; background:var(--surface); border:1px solid var(--border-2); border-radius:9px; box-shadow:var(--shadow); overflow:hidden; backdrop-filter:blur(40px) saturate(1.5); z-index:30;">
+
+      <!-- titlebar -->
+      <div onMouseDown="{{ dragWin }}" style="height:36px; flex:none; display:flex; align-items:center; padding-left:11px; gap:9px; cursor:default; -webkit-app-region:drag;">
+        <div style="width:18px; height:18px; border-radius:5px; background:linear-gradient(150deg, var(--accent), var(--accent-2)); display:flex; align-items:center; justify-content:center; color:#fff; flex:none;">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none"><rect x="10.5" y="7" width="3" height="9" rx="1.5" fill="#fff"/><circle cx="12" cy="17.5" r="3.4" fill="#fff"/></svg>
+        </div>
+        <div style="font-size:12.5px; font-weight:600; letter-spacing:.2px;">ARMTEMP <span style="color:var(--text-3); font-weight:400;">2.0.4</span></div>
+        <div style="flex:1;"></div>
+        <div onClick="{{ minApp }}" style="width:46px; height:36px; display:flex; align-items:center; justify-content:center; color:var(--text-2);" style-hover="background:var(--hover);"><div style="width:11px; height:1px; background:currentColor;"></div></div>
+        <div style="width:46px; height:36px; display:flex; align-items:center; justify-content:center; color:var(--text-2);" style-hover="background:var(--hover);"><div style="width:10px; height:10px; border:1px solid currentColor; border-radius:2px;"></div></div>
+        <div onClick="{{ closeApp }}" style="width:46px; height:36px; display:flex; align-items:center; justify-content:center; color:var(--text-2); font-size:15px;" style-hover="background:#c42b1c; color:#fff;">✕</div>
+      </div>
+
+      <!-- menu bar -->
+      <div style="height:30px; flex:none; display:flex; align-items:center; gap:2px; padding:0 8px; border-bottom:1px solid var(--border);">
+        <div onClick="{{ openOptions }}" style="font-size:12px; padding:4px 9px; border-radius:4px; color:var(--text-2);" style-hover="background:var(--hover);">Options</div>
+        <div onClick="{{ openTools }}" style="font-size:12px; padding:4px 9px; border-radius:4px; color:var(--text-2);" style-hover="background:var(--hover);">Tools</div>
+        <div onClick="{{ openHelp }}" style="font-size:12px; padding:4px 9px; border-radius:4px; color:var(--text-2);" style-hover="background:var(--hover);">Help</div>
+        <div style="flex:1;"></div>
+        <div onClick="{{ toggleUnit }}" title="Toggle °C / °F" style="font-size:11px; padding:3px 9px; border-radius:11px; border:1px solid var(--border-2); color:var(--text-2);" style-hover="background:var(--hover);">{{ unitLabel }}</div>
+      </div>
+
+      <!-- body -->
+      <div style="padding:13px 14px 14px; overflow:auto;">
+
+        <!-- processor info -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px 18px; padding:11px 13px; background:var(--card); border:1px solid var(--border); border-radius:7px;">
+          <div style="grid-column:1 / -1; display:flex; align-items:baseline; gap:8px; margin-bottom:5px;">
+            <div onClick="{{ openModelMenu }}" style="font-size:14px; font-weight:600; cursor:pointer;" style-hover="color:var(--accent);">{{ chip.name }}</div>
+            <div style="font-size:11px; color:var(--text-3); font-family:'Cascadia Code',ui-monospace,monospace;">{{ chip.model }}</div>
+            <div style="margin-left:auto; font-size:10px; padding:1px 7px; border-radius:9px; background:var(--accent-soft); color:var(--accent); font-weight:600;">{{ chip.coreLabel }}</div>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:11.5px;"><span style="color:var(--text-3);">Platform</span><span style="font-family:'Cascadia Code',ui-monospace,monospace;">ARM64 · Oryon</span></div>
+          <div style="display:flex; justify-content:space-between; font-size:11.5px;"><span style="color:var(--text-3);">Tj. Max</span><span style="font-family:'Cascadia Code',ui-monospace,monospace;">{{ tjMaxStr }}</span></div>
+          <div style="display:flex; justify-content:space-between; font-size:11.5px;"><span style="color:var(--text-3);">Frequency</span><span style="font-family:'Cascadia Code',ui-monospace,monospace;">{{ freqStr }}</span></div>
+          <div style="display:flex; justify-content:space-between; font-size:11.5px;"><span style="color:var(--text-3);">Voltage</span><span style="font-family:'Cascadia Code',ui-monospace,monospace;">{{ voltStr }}</span></div>
+          <div style="display:flex; justify-content:space-between; font-size:11.5px;"><span style="color:var(--text-3);">Cores / Threads</span><span style="font-family:'Cascadia Code',ui-monospace,monospace;">{{ chip.ct }}</span></div>
+          <div style="display:flex; justify-content:space-between; font-size:11.5px;"><span style="color:var(--text-3);">Power</span><span style="font-family:'Cascadia Code',ui-monospace,monospace;">{{ powerStr }}</span></div>
+        </div>
+
+        <!-- CLASSIC table -->
+        <sc-if value="{{ showTable }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:12px; border:1px solid var(--border); border-radius:7px; overflow:hidden;">
+            <div style="display:grid; grid-template-columns:1.4fr .9fr .9fr .9fr 1.5fr; padding:6px 11px; background:var(--card-2); font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3);">
+              <div>Core</div><div style="text-align:right;">Temp.</div><div style="text-align:right;">Low</div><div style="text-align:right;">High</div><div style="text-align:right;">Load</div>
+            </div>
+            <sc-for list="{{ rows }}" as="row" hint-placeholder-count="8">
+              <sc-if value="{{ row.isGroup }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:5px 11px 3px; font-size:10px; font-weight:600; letter-spacing:.4px; color:var(--text-3); background:var(--card); text-transform:uppercase;">{{ row.label }}</div>
+              </sc-if>
+              <sc-if value="{{ row.isCore }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid; grid-template-columns:1.4fr .9fr .9fr .9fr 1.5fr; align-items:center; padding:5px 11px; font-size:12px; border-top:1px solid var(--border);">
+                  <div style="display:flex; align-items:center; gap:6px;"><span style="width:6px; height:6px; border-radius:50%; background:{{ row.color }};"></span><span style="font-family:'Cascadia Code',ui-monospace,monospace;">{{ row.label }}</span></div>
+                  <div style="text-align:right; font-family:'Cascadia Code',ui-monospace,monospace; font-weight:600; color:{{ row.color }};">{{ row.tempStr }}</div>
+                  <div style="text-align:right; font-family:'Cascadia Code',ui-monospace,monospace; color:var(--text-3);">{{ row.minStr }}</div>
+                  <div style="text-align:right; font-family:'Cascadia Code',ui-monospace,monospace; color:var(--text-3);">{{ row.maxStr }}</div>
+                  <div style="display:flex; align-items:center; gap:7px; justify-content:flex-end;">
+                    <div style="width:62px; height:5px; border-radius:3px; background:var(--track); overflow:hidden;"><div style="height:100%; width:{{ row.loadPct }}%; background:{{ row.color }}; border-radius:3px;"></div></div>
+                    <span style="font-family:'Cascadia Code',ui-monospace,monospace; color:var(--text-2); width:30px; text-align:right;">{{ row.loadStr }}</span>
+                  </div>
+                </div>
+              </sc-if>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- CARDS / DASHBOARD -->
+        <sc-if value="{{ showCardish }}" hint-placeholder-val="{{ false }}">
+
+          <sc-if value="{{ showGraph }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px; padding:12px 13px 6px; background:var(--card); border:1px solid var(--border); border-radius:7px; position:relative;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div><div style="font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3);">Package temperature</div><div style="font-size:30px; font-weight:600; line-height:1.1; color:{{ pkgColor }};">{{ pkgStr }}</div></div>
+                <div style="text-align:right; font-size:11px; color:var(--text-3); line-height:1.7;"><div>Avg <span style="color:var(--text);">{{ avgStr }}</span></div><div>Power <span style="color:var(--text);">{{ powerStr }}</span></div></div>
+              </div>
+              <svg viewBox="0 0 520 96" preserveAspectRatio="none" style="width:100%; height:84px; margin-top:6px; display:block;">
+                <defs><linearGradient id="armg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{{ pkgColor }}" stop-opacity=".35"/><stop offset="1" stop-color="{{ pkgColor }}" stop-opacity="0"/></linearGradient></defs>
+                <path d="{{ graphArea }}" fill="url(#armg)"></path>
+                <polyline points="{{ graphLine }}" fill="none" stroke="{{ pkgColor }}" stroke-width="1.8" stroke-linejoin="round"></polyline>
+              </svg>
+            </div>
+          </sc-if>
+
+          <div style="margin-top:12px; display:grid; grid-template-columns:repeat(auto-fill, minmax(116px, 1fr)); gap:8px;">
+            <sc-for list="{{ cores }}" as="c" hint-placeholder-count="8">
+              <div style="padding:9px 10px; background:var(--card); border:1px solid var(--border); border-radius:7px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;"><span style="font-size:10.5px; color:var(--text-3); font-family:'Cascadia Code',ui-monospace,monospace;">{{ c.label }}</span><span style="font-size:8.5px; font-weight:700; color:var(--text-3); border:1px solid var(--border-2); border-radius:4px; padding:0 4px;">{{ c.typeShort }}</span></div>
+                <div style="font-size:23px; font-weight:600; line-height:1.3; color:{{ c.color }};">{{ c.tempStr }}</div>
+                <div style="height:5px; border-radius:3px; background:var(--track); overflow:hidden; margin:3px 0 5px;"><div style="height:100%; width:{{ c.loadPct }}%; background:{{ c.color }}; border-radius:3px;"></div></div>
+                <div style="display:flex; justify-content:space-between; font-size:9.5px; color:var(--text-3); font-family:'Cascadia Code',ui-monospace,monospace;"><span>{{ c.loadStr }}</span><span>{{ c.minStr }} / {{ c.maxStr }}</span></div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- summary footer -->
+        <div style="margin-top:12px; display:flex; align-items:center; gap:14px; padding:10px 13px; background:var(--card-2); border:1px solid var(--border); border-radius:7px;">
+          <div><div style="font-size:9.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3);">Package</div><div style="font-size:18px; font-weight:600; color:{{ pkgColor }};">{{ pkgStr }}</div></div>
+          <div style="width:1px; height:26px; background:var(--border-2);"></div>
+          <div><div style="font-size:9.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3);">Average</div><div style="font-size:18px; font-weight:600;">{{ avgStr }}</div></div>
+          <div style="flex:1;"></div>
+          <div onClick="{{ toggleMini }}" style="font-size:11.5px; padding:5px 11px; border-radius:5px; border:1px solid var(--border-2); color:var(--text-2);" style-hover="background:var(--hover);">Mini-mode</div>
+          <div onClick="{{ openOptions }}" style="font-size:11.5px; padding:5px 11px; border-radius:5px; background:var(--accent); color:#fff; font-weight:600;" style-hover="filter:brightness(1.08);">Settings</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ MINI MODE ============ -->
+  <sc-if value="{{ mini }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute; left:{{ miniPos.x }}px; top:{{ miniPos.y }}px; width:212px; background:var(--surface); border:1px solid var(--border-2); border-radius:8px; box-shadow:var(--shadow); overflow:hidden; backdrop-filter:blur(40px) saturate(1.5); z-index:35;">
+      <div onMouseDown="{{ dragMini }}" style="display:flex; align-items:center; gap:7px; padding:7px 9px; cursor:default;">
+        <div style="width:15px; height:15px; border-radius:4px; background:linear-gradient(150deg,var(--accent),var(--accent-2)); display:flex; align-items:center; justify-content:center;"><svg viewBox="0 0 24 24" width="10" height="10"><circle cx="12" cy="17" r="4" fill="#fff"/><rect x="10.5" y="7" width="3" height="9" rx="1.5" fill="#fff"/></svg></div>
+        <div style="font-size:11px; font-weight:600;">ARMTEMP</div>
+        <div style="flex:1;"></div>
+        <div onClick="{{ toggleMini }}" title="Expand" style="font-size:11px; color:var(--text-3); padding:2px 5px; border-radius:4px;" style-hover="background:var(--hover); color:var(--text);">▢</div>
+        <div onClick="{{ closeApp }}" style="font-size:12px; color:var(--text-3); padding:2px 5px; border-radius:4px;" style-hover="background:#c42b1c; color:#fff;">✕</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; padding:2px 11px 10px;">
+        <div style="font-size:30px; font-weight:600; color:{{ pkgColor }};">{{ pkgStr }}</div>
+        <div style="display:flex; flex-wrap:wrap; gap:3px; flex:1;">
+          <sc-for list="{{ cores }}" as="c" hint-placeholder-count="8">
+            <div title="{{ c.label }}" style="width:13px; height:13px; border-radius:3px; background:{{ c.color }}; opacity:.92;"></div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ SETTINGS ============ -->
+  <sc-if value="{{ settingsOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute; inset:0; background:rgba(0,0,0,.32); z-index:50; display:flex; align-items:center; justify-content:center;" onClick="{{ closeSettings }}">
+      <div onClick="{{ stop }}" style="width:692px; height:482px; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border-2); border-radius:9px; box-shadow:var(--shadow); overflow:hidden; backdrop-filter:blur(40px) saturate(1.5);">
+        <div style="height:36px; flex:none; display:flex; align-items:center; padding-left:13px; gap:9px;">
+          <div style="font-size:12.5px; font-weight:600;">ARMTEMP — Settings</div>
+          <div style="flex:1;"></div>
+          <div onClick="{{ closeSettings }}" style="width:46px; height:36px; display:flex; align-items:center; justify-content:center; color:var(--text-2); font-size:15px;" style-hover="background:#c42b1c; color:#fff;">✕</div>
+        </div>
+        <div style="flex:1; display:flex; min-height:0;">
+          <!-- nav -->
+          <div style="width:188px; flex:none; padding:8px; display:flex; flex-direction:column; gap:2px; border-right:1px solid var(--border);">
+            <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+              <div onClick="{{ t.on }}" style="{{ t.style }}">{{ t.label }}</div>
+            </sc-for>
+          </div>
+          <!-- content -->
+          <div style="flex:1; padding:16px 20px; overflow-y:auto; overflow-x:hidden;">
+
+            <sc-if value="{{ tabGeneral }}" hint-placeholder-val="{{ true }}">
+              <div style="font-size:15px; font-weight:600; margin-bottom:14px;">General</div>
+              <div style="{{ rowS }}"><div><div style="{{ rTitle }}">Start ARMTEMP with Windows</div><div style="{{ rSub }}">Launch automatically at sign-in</div></div><div onClick="{{ tg.startWin }}" style="{{ sw.startWin.track }}"><div style="{{ sw.startWin.knob }}"></div></div></div>
+              <div style="{{ rowS }}"><div><div style="{{ rTitle }}">Start minimized to tray</div><div style="{{ rSub }}">Go straight to the notification area</div></div><div onClick="{{ tg.startMin }}" style="{{ sw.startMin.track }}"><div style="{{ sw.startMin.knob }}"></div></div></div>
+              <div style="{{ rowS }}"><div><div style="{{ rTitle }}">Close to notification area</div><div style="{{ rSub }}">Closing the window keeps it running in the tray</div></div><div onClick="{{ tg.closeTray }}" style="{{ sw.closeTray.track }}"><div style="{{ sw.closeTray.knob }}"></div></div></div>
+              <div style="{{ rowS }}"><div><div style="{{ rTitle }}">Follow Windows theme</div><div style="{{ rSub }}">Mirror the system light / dark mode</div></div><div onClick="{{ tg.followTheme }}" style="{{ sw.followTheme.track }}"><div style="{{ sw.followTheme.knob }}"></div></div></div>
+              <div style="{{ rowS }}"><div><div style="{{ rTitle }}">Temperature unit</div><div style="{{ rSub }}">Display readings in Celsius or Fahrenheit</div></div><div style="display:flex; gap:2px; padding:3px; background:var(--track); border-radius:7px;"><div onClick="{{ setUnitC }}" style="{{ unitSegC }}">°C</div><div onClick="{{ setUnitF }}" style="{{ unitSegF }}">°F</div></div></div>
+            </sc-if>
+
+            <sc-if value="{{ tabDisplay }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:15px; font-weight:600; margin-bottom:14px;">Display</div>
+              <div style="{{ rowS }}"><div><div style="{{ rTitle }}">Main window style</div><div style="{{ rSub }}">Layout used for the core readout</div></div>
+                <div style="display:flex; gap:2px; padding:3px; background:var(--track); border-radius:7px;">
+                  <div onClick="{{ setUiClassic }}" style="{{ uiSeg.classic }}">Classic</div>
+                  <div onClick="{{ setUiCards }}" style="{{ uiSeg.cards }}">Cards</div>
+                  <div onClick="{{ setUiDash }}" style="{{ uiSeg.dashboard }}">Dashboard</div>
+                </div>
+              </div>
+              <div style="{{ rowS }}"><div><div style="{{ rTitle }}">Show temperature in toolbar</div><div style="{{ rSub }}">Per-core readings or a combined average</div></div>
+                <div style="display:flex; gap:2px; padding:3px; background:var(--track); border-radius:7px;"><div onClick="{{ setTbPer }}" style="{{ tbSeg.per }}">Per-core</div><div onClick="{{ setTbAvg }}" style="{{ tbSeg.avg }}">Average</div></div>
+              </div>
+              <div style="{{ rowS }}"><div><div style="{{ rTitle }}">Window zoom</div><div style="{{ rSub }}">Scale the ARMTEMP window</div></div>
+                <div style="display:flex; gap:2px; padding:3px; background:var(--track); border-radius:7px;"><div onClick="{{ setZoom75 }}" style="{{ zoomSeg.z75 }}">75%</div><div onClick="{{ setZoom100 }}" style="{{ zoomSeg.z100 }}">100%</div><div onClick="{{ setZoom125 }}" style="{{ zoomSeg.z125 }}">125%</div></div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ tabNotif }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:15px; font-weight:600; margin-bottom:14px;">Notification area</div>
+              <div style="{{ rowS }}"><div><div style="{{ rTitle }}">Show temperature icons in tray</div><div style="{{ rSub }}">Live readouts in the taskbar corner</div></div><div onClick="{{ tg.trayOn }}" style="{{ sw.trayOn.track }}"><div style="{{ sw.trayOn.knob }}"></div></div></div>
+              <div style="font-size:11px; color:var(--text-3); margin:14px 0 8px; text-transform:uppercase; letter-spacing:.5px;">Tray icon mode</div>
+              <sc-for list="{{ trayModes }}" as="m" hint-placeholder-count="4">
+                <div onClick="{{ m.on }}" style="{{ m.style }}"><div style="{{ m.dot }}"></div><div><div style="font-size:12.5px;">{{ m.label }}</div><div style="font-size:10.5px; color:var(--text-3);">{{ m.sub }}</div></div></div>
+              </sc-for>
+              <div style="font-size:11px; color:var(--text-3); margin:16px 0 8px; text-transform:uppercase; letter-spacing:.5px;">Icon style</div>
+              <div style="display:flex; gap:8px;">
+                <div onClick="{{ setTsRounded }}" style="{{ tsSeg.rounded }}">Rounded</div>
+                <div onClick="{{ setTsBadge }}" style="{{ tsSeg.badge }}">Badge</div>
+                <div onClick="{{ setTsPlain }}" style="{{ tsSeg.plain }}">Plain</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ tabOver }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:15px; font-weight:600; margin-bottom:14px;">Overheat protection</div>
+              <div style="{{ rowS }}"><div><div style="{{ rTitle }}">Enable overheat protection</div><div style="{{ rSub }}">Take action when a core gets too hot</div></div><div onClick="{{ tg.overOn }}" style="{{ sw.overOn.track }}"><div style="{{ sw.overOn.knob }}"></div></div></div>
+              <div style="padding:12px 0; border-bottom:1px solid var(--border);">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><div style="{{ rTitle }}">Warning threshold</div><div style="font-family:'Cascadia Code',ui-monospace,monospace; font-weight:600; color:var(--accent);">{{ overTempStr }}</div></div>
+                <input type="range" min="70" max="105" step="1" value="{{ overTemp }}" onInput="{{ onOverTemp }}" style="width:100%; accent-color:var(--accent);"/>
+                <div style="font-size:10.5px; color:var(--text-3); margin-top:4px;">Recommended: ~5° below Tj. Max ({{ tjMaxStr }})</div>
+              </div>
+              <div style="font-size:11px; color:var(--text-3); margin:14px 0 8px; text-transform:uppercase; letter-spacing:.5px;">Action when exceeded</div>
+              <sc-for list="{{ overActions }}" as="a" hint-placeholder-count="3">
+                <div onClick="{{ a.on }}" style="{{ a.style }}"><div style="{{ a.dot }}"></div><div style="font-size:12.5px;">{{ a.label }}</div></div>
+              </sc-for>
+            </sc-if>
+
+            <sc-if value="{{ tabAbout }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:15px; font-weight:600; margin-bottom:14px;">About</div>
+              <div style="display:flex; align-items:center; gap:13px; margin-bottom:16px;">
+                <div style="width:52px; height:52px; border-radius:13px; background:linear-gradient(150deg,var(--accent),var(--accent-2)); display:flex; align-items:center; justify-content:center; color:#fff;"><svg viewBox="0 0 24 24" width="28" height="28"><rect x="9" y="3" width="6" height="13" rx="3" fill="#fff" opacity=".35"/><rect x="10.5" y="7" width="3" height="9" rx="1.5" fill="#fff"/><circle cx="12" cy="17.5" r="4.2" fill="#fff"/></svg></div>
+                <div><div style="font-size:17px; font-weight:600;">ARMTEMP</div><div style="font-size:12px; color:var(--text-3);">Version 2.0.4 · ARM64 build · runs under Electron</div></div>
+              </div>
+              <div style="font-size:11px; color:var(--text-3); margin:6px 0 8px; text-transform:uppercase; letter-spacing:.5px;">Detected processor</div>
+              <sc-for list="{{ chipList }}" as="cp" hint-placeholder-count="6">
+                <div onClick="{{ cp.on }}" style="{{ cp.style }}"><div style="{{ cp.dot }}"></div><div style="flex:1;"><div style="font-size:12.5px;">{{ cp.name }}</div><div style="font-size:10.5px; color:var(--text-3); font-family:'Cascadia Code',ui-monospace,monospace;">{{ cp.model }} · {{ cp.coreLabel }}</div></div></div>
+              </sc-for>
+              <div style="font-size:11px; color:var(--text-3); margin-top:14px; line-height:1.6;">Per-core temperatures read from on-die thermal sensors. ARMTEMP is an independent monitoring utility and is not affiliated with any silicon vendor.</div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ START MENU ============ -->
+  <sc-if value="{{ startOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ stop }}" style="position:absolute; bottom:60px; left:50%; transform:translateX(-50%); width:560px; padding:22px 28px 14px; background:var(--mica); border:1px solid var(--border-2); border-radius:11px; box-shadow:var(--shadow); backdrop-filter:blur(48px) saturate(1.7); z-index:45;">
+      <div style="display:flex; align-items:center; gap:9px; padding:7px 13px; background:var(--card); border:1px solid var(--border-2); border-radius:18px; margin-bottom:18px;">
+        <span style="color:var(--text-3);">⌕</span>
+        <input value="{{ search }}" onInput="{{ onSearch }}" placeholder="Search for apps, settings, and documents" style="border:none; outline:none; background:transparent; color:var(--text); font-size:12.5px; flex:1; font-family:inherit;"/>
+      </div>
+
+      <sc-if value="{{ hasSearch }}" hint-placeholder-val="{{ false }}">
+        <div style="font-size:11.5px; color:var(--text-3); margin-bottom:8px;">Best match</div>
+        <sc-if value="{{ searchHit }}" hint-placeholder-val="{{ true }}">
+          <div onClick="{{ openApp }}" style="display:flex; align-items:center; gap:11px; padding:9px 11px; border-radius:7px; background:var(--accent-soft); cursor:pointer;">
+            <div style="width:34px; height:34px; border-radius:8px; background:linear-gradient(150deg,var(--accent),var(--accent-2)); display:flex; align-items:center; justify-content:center; color:#fff;"><svg viewBox="0 0 24 24" width="19" height="19"><rect x="10.5" y="7" width="3" height="9" rx="1.5" fill="#fff"/><circle cx="12" cy="17.5" r="3.6" fill="#fff"/></svg></div>
+            <div><div style="font-size:13px; font-weight:600;">ARMTEMP</div><div style="font-size:11px; color:var(--text-3);">App · CPU temperature monitor</div></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ searchMiss }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:12px; color:var(--text-3); padding:10px 2px;">No results for “{{ search }}”.</div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ noSearch }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;"><div style="font-size:13px; font-weight:600;">Pinned</div></div>
+        <div style="display:grid; grid-template-columns:repeat(6,1fr); gap:6px 4px;">
+          <sc-for list="{{ pinned }}" as="p" hint-placeholder-count="12">
+            <div onClick="{{ p.on }}" style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:11px 4px 8px; border-radius:7px; cursor:default;" style-hover="background:var(--hover);">
+              <div style="width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:14px; font-weight:600; background:{{ p.bg }};">{{ p.glyph }}</div>
+              <div style="font-size:10.5px; color:var(--text-2); text-align:center; line-height:1.2;">{{ p.name }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <div style="display:flex; align-items:center; gap:9px; margin-top:16px; padding-top:13px; border-top:1px solid var(--border-2);">
+        <div style="width:28px; height:28px; border-radius:50%; background:linear-gradient(150deg,#7a8aa8,#4a5a78); display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:600;">A</div>
+        <div style="font-size:12.5px; font-weight:500;">Admin</div>
+        <div style="flex:1;"></div>
+        <div style="width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--text-2);" style-hover="background:var(--hover);"><div style="width:11px; height:11px; border:1.5px solid currentColor; border-radius:50%; border-top-color:transparent; transform:rotate(45deg);"></div></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ TRAY FLYOUT ============ -->
+  <sc-if value="{{ trayOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ stop }}" style="position:absolute; bottom:60px; right:172px; width:208px; padding:13px; background:var(--mica); border:1px solid var(--border-2); border-radius:9px; box-shadow:var(--shadow); backdrop-filter:blur(40px) saturate(1.7); z-index:45;">
+      <div style="font-size:11px; color:var(--text-3); margin-bottom:9px;">ARMTEMP — all cores</div>
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:5px;">
+        <sc-for list="{{ cores }}" as="c" hint-placeholder-count="8">
+          <div onClick="{{ openApp }}" title="{{ c.label }}" style="aspect-ratio:1; border-radius:6px; background:{{ c.trayBg }}; border:1px solid {{ c.trayBorder }}; display:flex; flex-direction:column; align-items:center; justify-content:center; color:{{ c.trayFg }}; cursor:pointer;"><span style="font-size:12px; font-weight:700; font-family:'Cascadia Code',ui-monospace,monospace;">{{ c.trayNum }}</span></div>
+        </sc-for>
+      </div>
+      <div style="display:flex; gap:7px; margin-top:11px; padding-top:11px; border-top:1px solid var(--border-2);">
+        <div style="width:30px; height:30px; border-radius:7px; background:var(--card); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--text-3); font-size:13px;">◑</div>
+        <div style="width:30px; height:30px; border-radius:7px; background:var(--card); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--text-3); font-size:13px;">▲</div>
+        <div style="width:30px; height:30px; border-radius:7px; background:var(--card); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--text-3); font-size:11px;">USB</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ CONTEXT MENU ============ -->
+  <sc-if value="{{ ctx }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ stop }}" style="position:absolute; left:{{ ctx.x }}px; top:{{ ctx.y }}px; min-width:212px; padding:5px; background:var(--mica); border:1px solid var(--border-2); border-radius:8px; box-shadow:var(--shadow); backdrop-filter:blur(40px) saturate(1.7); z-index:70;">
+      <sc-for list="{{ ctx.items }}" as="it" hint-placeholder-count="5">
+        <sc-if value="{{ it.sep }}" hint-placeholder-val="{{ false }}"><div style="height:1px; background:var(--border-2); margin:4px 8px;"></div></sc-if>
+        <sc-if value="{{ it.isItem }}" hint-placeholder-val="{{ true }}">
+          <div onClick="{{ it.on }}" style="{{ it.style }}"><span style="width:16px; text-align:center; color:var(--text-3); font-size:12px;">{{ it.icon }}</span><span style="flex:1;">{{ it.label }}</span><span style="font-size:10.5px; color:var(--text-3);">{{ it.accel }}</span></div>
+        </sc-if>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <!-- ============ TASKBAR ============ -->
+  <div onClick="{{ stop }}" style="position:absolute; left:0; right:0; bottom:0; height:48px; background:var(--taskbar); border-top:1px solid var(--border); backdrop-filter:blur(40px) saturate(1.7); display:flex; align-items:center; z-index:40;">
+
+    <!-- left widget: package temp -->
+    <div onClick="{{ openApp }}" style="position:absolute; left:10px; display:flex; align-items:center; gap:7px; padding:5px 11px 5px 8px; border-radius:7px; cursor:pointer;" style-hover="background:var(--hover);">
+      <div style="width:20px; height:20px; border-radius:5px; background:linear-gradient(150deg,var(--accent),var(--accent-2)); display:flex; align-items:center; justify-content:center; color:#fff;"><svg viewBox="0 0 24 24" width="13" height="13"><circle cx="12" cy="17" r="3.6" fill="#fff"/><rect x="10.5" y="7" width="3" height="9" rx="1.5" fill="#fff"/></svg></div>
+      <div style="line-height:1.05;"><div style="font-size:13px; font-weight:600; color:{{ pkgColor }};">{{ pkgStr }}</div></div>
+    </div>
+
+    <!-- center cluster -->
+    <div style="position:absolute; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:5px;">
+      <div onClick="{{ toggleStart }}" style="width:42px; height:38px; border-radius:7px; display:flex; align-items:center; justify-content:center;" style-hover="background:var(--hover);">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:2.5px;"><div style="width:8px; height:8px; border-radius:2px; background:var(--accent);"></div><div style="width:8px; height:8px; border-radius:2px; background:var(--accent);"></div><div style="width:8px; height:8px; border-radius:2px; background:var(--accent);"></div><div style="width:8px; height:8px; border-radius:2px; background:var(--accent);"></div></div>
+      </div>
+      <div onClick="{{ toggleStart }}" style="width:42px; height:38px; border-radius:7px; display:flex; align-items:center; justify-content:center; color:var(--text-2); font-size:17px;" style-hover="background:var(--hover);">⌕</div>
+      <div style="width:38px; height:38px; border-radius:7px; display:flex; align-items:center; justify-content:center;" style-hover="background:var(--hover);"><div style="width:21px; height:16px; border:1.6px solid var(--text-2); border-radius:3px; position:relative;"><div style="position:absolute; top:-1.6px; left:3px; width:7px; height:4px; border:1.6px solid var(--text-2); border-bottom:none; border-radius:3px 3px 0 0;"></div></div></div>
+      <div style="width:38px; height:38px; border-radius:7px; display:flex; align-items:center; justify-content:center;" style-hover="background:var(--hover);"><div style="width:18px; height:18px; border:1.6px solid var(--text-2); border-radius:50%;"></div></div>
+      <!-- ARMTEMP pinned -->
+      <div onClick="{{ clickTaskApp }}" onContextMenu="{{ ctxTaskbar }}" style="width:38px; height:38px; border-radius:7px; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative;" style-hover="background:var(--hover);">
+        <div style="width:23px; height:23px; border-radius:6px; background:linear-gradient(150deg,var(--accent),var(--accent-2)); display:flex; align-items:center; justify-content:center; color:#fff;"><svg viewBox="0 0 24 24" width="15" height="15"><rect x="10.5" y="7" width="3" height="9" rx="1.5" fill="#fff"/><circle cx="12" cy="17.5" r="3.6" fill="#fff"/></svg></div>
+        <div style="{{ taskUnderline }}"></div>
+      </div>
+    </div>
+
+    <!-- right cluster -->
+    <div style="position:absolute; right:0; display:flex; align-items:center; height:100%;">
+      <div onClick="{{ toggleTray }}" style="height:38px; padding:0 7px; display:flex; align-items:center; border-radius:7px; color:var(--text-2); font-size:11px;" style-hover="background:var(--hover);">▲</div>
+      <!-- tray temp icons -->
+      <div onClick="{{ openApp }}" onContextMenu="{{ ctxTray }}" style="height:38px; display:flex; align-items:center; gap:4px; padding:0 7px; border-radius:7px;" style-hover="background:var(--hover);">
+        <sc-for list="{{ trayIcons }}" as="t" hint-placeholder-count="2">
+          <div style="{{ t.wrap }}"><span style="font-size:11px; font-weight:700; font-family:'Cascadia Code',ui-monospace,monospace; color:{{ t.fg }};">{{ t.num }}</span></div>
+        </sc-for>
+      </div>
+      <div style="height:38px; display:flex; align-items:center; gap:9px; padding:0 11px; border-radius:7px; color:var(--text-2);" style-hover="background:var(--hover);">
+        <div style="width:15px; height:11px; border:1.5px solid currentColor; border-bottom:none; border-radius:8px 8px 0 0; position:relative;"></div>
+        <div style="display:flex; align-items:flex-end; gap:1.5px; height:13px;"><div style="width:3px; height:5px; background:currentColor; border-radius:1px;"></div><div style="width:3px; height:8px; background:currentColor; border-radius:1px;"></div><div style="width:3px; height:11px; background:currentColor; border-radius:1px;"></div></div>
+        <div style="width:20px; height:11px; border:1.5px solid currentColor; border-radius:3px; position:relative;"><div style="position:absolute; left:1.5px; top:1.5px; bottom:1.5px; width:60%; background:currentColor; border-radius:1px;"></div><div style="position:absolute; right:-3px; top:3px; bottom:3px; width:2px; background:currentColor; border-radius:0 1px 1px 0;"></div></div>
+      </div>
+      <div style="height:38px; display:flex; flex-direction:column; align-items:flex-end; justify-content:center; padding:0 13px; border-radius:7px; line-height:1.35;" style-hover="background:var(--hover);">
+        <div style="font-size:11.5px;">{{ clockTime }}</div>
+        <div style="font-size:11.5px;">{{ clockDate }}</div>
+      </div>
+      <div style="width:6px; height:100%; border-left:1px solid var(--border);"></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1320,&quot;height&quot;:824},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#0078D4&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;uiStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;classic&quot;,&quot;cards&quot;,&quot;dashboard&quot;],&quot;default&quot;:&quot;classic&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;startTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;defaultChip&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Snapdragon X&quot;,&quot;Snapdragon X Plus&quot;,&quot;Snapdragon X Elite&quot;,&quot;Snapdragon X2&quot;,&quot;Snapdragon X2 Plus&quot;,&quot;Snapdragon X2 Elite&quot;],&quot;default&quot;:&quot;Snapdragon X&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: 'dark', accent: '#0078D4', uiStyle: 'classic', chipIndex: 2,
+    tempUnit: 'C', load: 'idle',
+    startOpen: false, search: '', trayOpen: false,
+    appOpen: true, appMin: false, mini: false,
+    settingsOpen: false, settingsTab: 'general',
+    ctx: null,
+    startWithWindows: true, startMinimized: false, closeToTray: true, followTheme: true,
+    trayOn: true, trayMode: 'highest', trayStyle: 'rounded', toolbarMode: 'per-core',
+    overOn: false, overTemp: 95, overAction: 'notify', zoom: 100,
+    win: { x: 318, y: 64 }, miniPos: { x: 470, y: 150 },
+    cores: [], history: [],
+  };
+
+  chips = [
+    { id:'X', name:'Snapdragon X', model:'X1-26-100', tjMax:100, base:3.0, boost:3.0, tdp:23, clusters:[{type:'Performance', n:8}] },
+    { id:'XP', name:'Snapdragon X Plus', model:'X1P-64-100', tjMax:100, base:3.4, boost:3.4, tdp:28, clusters:[{type:'Performance', n:10}] },
+    { id:'XE', name:'Snapdragon X Elite', model:'X1E-80-100', tjMax:100, base:3.4, boost:4.0, tdp:37, clusters:[{type:'Performance', n:4},{type:'Performance', n:4},{type:'Performance', n:4}] },
+    { id:'X2', name:'Snapdragon X2', model:'X2-46-100', tjMax:105, base:3.4, boost:3.6, tdp:25, clusters:[{type:'Prime', n:6},{type:'Efficiency', n:6}] },
+    { id:'X2P', name:'Snapdragon X2 Plus', model:'X2P-66-100', tjMax:105, base:3.8, boost:4.2, tdp:40, clusters:[{type:'Prime', n:8},{type:'Efficiency', n:8}] },
+    { id:'X2E', name:'Snapdragon X2 Elite', model:'X2E-88-100', tjMax:105, base:4.0, boost:5.0, tdp:50, clusters:[{type:'Prime', n:12},{type:'Efficiency', n:6}] },
+  ];
+
+  componentDidMount() {
+    const p = this.props || {};
+    const ci = this.chips.findIndex(c => c.name === p.defaultChip);
+    this.setState({
+      theme: p.startTheme || 'dark',
+      accent: p.accent || '#0078D4',
+      uiStyle: p.uiStyle || 'classic',
+      chipIndex: ci >= 0 ? ci : 2,
+    }, () => this.regen());
+    this.iv = setInterval(() => this.tick(), 650);
+    window.addEventListener('mousemove', this.onMove);
+    window.addEventListener('mouseup', this.onUp);
+  }
+  componentWillUnmount() {
+    clearInterval(this.iv);
+    window.removeEventListener('mousemove', this.onMove);
+    window.removeEventListener('mouseup', this.onUp);
+  }
+
+  rand(a, b) { return a + Math.random() * (b - a); }
+
+  regen() {
+    const chip = this.chips[this.state.chipIndex];
+    const cores = [];
+    chip.clusters.forEach((cl, gi) => {
+      for (let k = 0; k < cl.n; k++) {
+        const eff = cl.type === 'Efficiency';
+        const t = (eff ? 36 : 41) + this.rand(0, 4);
+        cores.push({ type: cl.type, group: gi, eff, load: this.rand(1, 8), temp: t, min: t, max: t });
+      }
+    });
+    this.setState({ cores, history: [] });
+  }
+
+  tick() {
+    const chip = this.chips[this.state.chipIndex];
+    const heavy = this.state.load === 'heavy';
+    const cores = this.state.cores.map(c => {
+      const target = heavy ? (c.eff ? this.rand(35, 78) : this.rand(72, 99)) : (c.eff ? this.rand(1, 9) : this.rand(2, 15));
+      let load = c.load + (target - c.load) * 0.28 + this.rand(-4, 4);
+      load = Math.max(0, Math.min(100, load));
+      const idleT = c.eff ? 36 : 41;
+      const span = (chip.tjMax - (c.eff ? 22 : 12)) - idleT;
+      const targetTemp = idleT + (load / 100) * span;
+      let temp = c.temp + (targetTemp - c.temp) * 0.22 + this.rand(-0.6, 0.6);
+      temp = Math.max(30, Math.min(chip.tjMax, temp));
+      return { ...c, load, temp, min: Math.min(c.min, temp), max: Math.max(c.max, temp) };
+    });
+    const pkg = cores.length ? Math.max(...cores.map(c => c.temp)) : 40;
+    const history = [...this.state.history, pkg].slice(-48);
+    this.setState({ cores, history });
+  }
+
+  fmt(t) { return this.state.tempUnit === 'C' ? Math.round(t) + '°C' : Math.round(t * 9 / 5 + 32) + '°F'; }
+  fmtNum(t) { return this.state.tempUnit === 'C' ? Math.round(t) : Math.round(t * 9 / 5 + 32); }
+  tcolor(t, tj) { const r = (t - 35) / ((tj || 100) - 35); if (r < 0.45) return '#2fa45a'; if (r < 0.64) return '#d8a51a'; if (r < 0.82) return '#e07a2b'; return '#e0473a'; }
+
+  // ---- scene helpers
+  onMove = (e) => {
+    if (!this.drag) return;
+    const x = e.clientX - this.drag.dx, y = Math.max(0, e.clientY - this.drag.dy);
+    if (this.drag.t === 'win') this.setState({ win: { x, y } });
+    else this.setState({ miniPos: { x, y } });
+  };
+  onUp = () => { this.drag = null; };
+
+  vars() {
+    const a = this.state.accent || '#0078D4';
+    const a2 = this.shade(a, -22);
+    const dark = this.state.theme === 'dark';
+    const soft = this.hexA(a, dark ? 0.22 : 0.12);
+    const base = dark ? {
+      '--mica':'rgba(43,43,43,0.74)','--surface':'#272727','--surface-2':'#2f2f2f','--card':'#2d2d2d','--card-2':'#333333',
+      '--text':'#ffffff','--text-2':'rgba(255,255,255,0.78)','--text-3':'rgba(255,255,255,0.5)',
+      '--border':'rgba(255,255,255,0.07)','--border-2':'rgba(255,255,255,0.13)','--hover':'rgba(255,255,255,0.06)',
+      '--track':'rgba(255,255,255,0.1)','--taskbar':'rgba(34,34,34,0.78)',
+      '--wall':'radial-gradient(125% 125% at 18% 8%, #2b3c63 0%, #18223e 46%, #0b0f1d 100%)','--wall-blob':'rgba(80,120,200,0.22)',
+      '--shadow':'0 20px 60px rgba(0,0,0,0.6)',
+    } : {
+      '--mica':'rgba(249,249,249,0.78)','--surface':'#f3f3f3','--surface-2':'#eaeaea','--card':'#ffffff','--card-2':'#f7f7f7',
+      '--text':'#1b1b1b','--text-2':'rgba(0,0,0,0.68)','--text-3':'rgba(0,0,0,0.45)',
+      '--border':'rgba(0,0,0,0.07)','--border-2':'rgba(0,0,0,0.13)','--hover':'rgba(0,0,0,0.045)',
+      '--track':'rgba(0,0,0,0.1)','--taskbar':'rgba(243,243,243,0.8)',
+      '--wall':'radial-gradient(125% 125% at 18% 8%, #d4e2ff 0%, #a7c0ee 46%, #7793d4 100%)','--wall-blob':'rgba(255,255,255,0.28)',
+      '--shadow':'0 20px 60px rgba(0,0,0,0.25)',
+    };
+    return { ...base, '--accent': a, '--accent-2': a2, '--accent-soft': soft };
+  }
+  hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+  shade(hex, p) { let n = parseInt(hex.slice(1), 16); let r=(n>>16)&255, g=(n>>8)&255, b=n&255; const f=(c)=>Math.max(0,Math.min(255,Math.round(c+c*p/100))); return '#'+[f(r),f(g),f(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+
+  seg(active) { return `font-size:11px; padding:3px 11px; border-radius:6px; cursor:pointer; font-weight:${active?600:400}; color:${active?'#fff':'var(--text-2)'}; background:${active?'var(--accent)':'transparent'};`; }
+  segT(active) { return `font-size:11.5px; padding:4px 13px; border-radius:5px; cursor:pointer; font-weight:${active?600:400}; color:${active?'var(--text)':'var(--text-2)'}; background:${active?'var(--card)':'transparent'}; box-shadow:${active?'0 1px 3px rgba(0,0,0,.12)':'none'};`; }
+  swObj(on) { return { track: `width:40px; height:21px; border-radius:11px; background:${on?'var(--accent)':'transparent'}; border:1px solid ${on?'var(--accent)':'var(--text-3)'}; position:relative; cursor:pointer; flex:none; transition:background .15s;`, knob: `position:absolute; top:50%; margin-top:-6px; left:4px; width:12px; height:12px; border-radius:50%; background:${on?'#fff':'var(--text-2)'}; transform:${on?'translateX(18px)':'translateX(0)'}; transition:transform .15s;` }; }
+  radioRow(active) { return `display:flex; align-items:center; gap:11px; padding:9px 11px; border-radius:7px; cursor:pointer; margin-bottom:5px; border:1px solid ${active?'var(--accent)':'var(--border)'}; background:${active?'var(--accent-soft)':'var(--card)'};`; }
+  radioDot(active) { return `width:15px; height:15px; border-radius:50%; flex:none; border:2px solid ${active?'var(--accent)':'var(--text-3)'}; background:${active?'radial-gradient(circle, var(--accent) 0 4px, transparent 5px)':'transparent'};`; }
+  navItem(active) { return `font-size:12.5px; padding:8px 11px; border-radius:6px; cursor:pointer; color:var(--text-2); background:${active?'var(--hover)':'transparent'}; font-weight:${active?600:400}; ${active?'box-shadow:inset 3px 0 0 var(--accent);':''}`; }
+  ctxItem() { return 'display:flex; align-items:center; gap:11px; padding:7px 9px; border-radius:5px; font-size:12.5px; cursor:pointer; color:var(--text);'; }
+
+  // ---- actions
+  openApp = () => this.setState({ appOpen: true, appMin: false, mini: false, startOpen: false, search: '', trayOpen: false, ctx: null });
+  closeApp = () => this.setState({ appOpen: false, mini: false });
+  minApp = () => this.setState({ appMin: true });
+  focusApp = () => {};
+  clickTaskApp = () => { const s = this.state; if (!s.appOpen || s.appMin || s.mini) this.openApp(); else this.setState({ appMin: true }); };
+  toggleStart = () => this.setState(s => ({ startOpen: !s.startOpen, trayOpen: false, ctx: null, search: '' }));
+  toggleTray = () => this.setState(s => ({ trayOpen: !s.trayOpen, startOpen: false, ctx: null }));
+  toggleMini = () => this.setState(s => ({ mini: !s.mini, appMin: false, appOpen: true }));
+  openOptions = () => this.setState({ settingsOpen: true, settingsTab: 'general' });
+  openTools = () => this.setState({ settingsOpen: true, settingsTab: 'notif' });
+  openHelp = () => this.setState({ settingsOpen: true, settingsTab: 'about' });
+  openModelMenu = () => this.setState({ settingsOpen: true, settingsTab: 'about' });
+  closeSettings = () => this.setState({ settingsOpen: false });
+  closeOverlays = () => this.setState({ startOpen: false, trayOpen: false, ctx: null });
+  stop = (e) => { e.stopPropagation(); };
+  toggleUnit = () => this.setState(s => ({ tempUnit: s.tempUnit === 'C' ? 'F' : 'C' }));
+
+  ctxMenu(type, e) {
+    e.preventDefault(); e.stopPropagation();
+    const close = (fn) => () => { this.setState({ ctx: null }); fn && fn(); };
+    let items;
+    if (type === 'taskbar') items = [
+      { label:'Open ARMTEMP', icon:'▣', on: close(this.openApp) },
+      { label:'Settings', icon:'⚙', on: close(this.openOptions) },
+      { label:'Mini-mode', icon:'▢', on: close(this.toggleMini) },
+      { sep:true },
+      { label:'Pin to taskbar', icon:'⚲', on: close() },
+      { label:'Close window', icon:'✕', accel:'Alt+F4', on: close(this.closeApp) },
+    ];
+    else items = [
+      { label:'Open ARMTEMP', icon:'▣', on: close(this.openApp) },
+      { label:'Settings', icon:'⚙', on: close(this.openOptions) },
+      { label:'Notification area…', icon:'▦', on: close(() => this.setState({ settingsOpen:true, settingsTab:'notif' })) },
+      { sep:true },
+      { label:'Refresh sensors', icon:'↻', on: close(() => this.regen()) },
+      { label:'Exit', icon:'⏻', on: close(this.closeApp) },
+    ];
+    const y = Math.min(e.clientY, window.innerHeight - 320);
+    const x = Math.min(e.clientX, window.innerWidth - 230);
+    this.setState({ ctx: { x, y, items }, startOpen:false, trayOpen:false });
+  }
+  ctxTaskbar = (e) => this.ctxMenu('taskbar', e);
+  ctxTray = (e) => this.ctxMenu('tray', e);
+
+  dragWin = (e) => { if (e.button !== 0) return; const p = this.state.win; this.drag = { t:'win', dx:e.clientX-p.x, dy:e.clientY-p.y }; };
+  dragMini = (e) => { if (e.button !== 0) return; const p = this.state.miniPos; this.drag = { t:'mini', dx:e.clientX-p.x, dy:e.clientY-p.y }; };
+
+  onSearch = (e) => this.setState({ search: e.target.value });
+
+  setChipIdx(i) { this.setState({ chipIndex: i }, () => this.regen()); }
+
+  renderVals() {
+    const s = this.state;
+    const chip = this.chips[s.chipIndex];
+    const dark = s.theme === 'dark';
+
+    const cores = s.cores.map((c, i) => ({
+      idx:i, label:'Core #'+i, type:c.type, typeShort: c.eff ? 'E' : 'P',
+      tempStr:this.fmt(c.temp), minStr:this.fmt(c.min), maxStr:this.fmt(c.max),
+      loadStr:Math.round(c.load)+' %', loadPct:Math.round(c.load),
+      color:this.tcolor(c.temp, chip.tjMax),
+      trayNum:this.fmtNum(c.temp), trayBg:this.hexA(this.tcolor(c.temp,chip.tjMax), .18),
+      trayBorder:this.hexA(this.tcolor(c.temp,chip.tjMax), .5), trayFg:this.tcolor(c.temp, chip.tjMax),
+    }));
+    const temps = s.cores.map(c => c.temp);
+    const loads = s.cores.map(c => c.load);
+    const pkg = temps.length ? Math.max(...temps) : 40;
+    const avg = temps.length ? temps.reduce((a,b)=>a+b,0)/temps.length : 40;
+    const avgLoad = loads.length ? loads.reduce((a,b)=>a+b,0)/loads.length : 0;
+    const maxLoad = loads.length ? Math.max(...loads) : 0;
+
+    const rows = [];
+    let ci = 0;
+    chip.clusters.forEach((cl, gi) => {
+      const single = chip.clusters.length === 1;
+      rows.push({ isGroup:true, isCore:false, label: single ? cl.type+' cores' : cl.type+' cluster '+(gi+1) });
+      for (let k = 0; k < cl.n; k++) { const c = cores[ci]; if (c) rows.push({ ...c, isGroup:false, isCore:true }); ci++; }
+    });
+
+    // graph
+    const h = s.history; const W = 520, H = 92, lo = 30, hi = chip.tjMax;
+    let graphLine = '', graphArea = '';
+    if (h.length > 1) {
+      const pts = h.map((t, i) => { const x = (i / 47) * W; const y = H - ((t - lo) / (hi - lo)) * H; return [x, y]; });
+      graphLine = pts.map(p => p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+      graphArea = 'M' + pts[0][0].toFixed(1)+','+H + ' L' + pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L') + ' L' + pts[pts.length-1][0].toFixed(1)+','+H + ' Z';
+    }
+
+    // tray icons (taskbar)
+    let trayItems = [];
+    if (s.trayOn) {
+      const mk = (t) => { const col = this.tcolor(t, chip.tjMax); const st = s.trayStyle;
+        const wrap = st === 'plain'
+          ? `min-width:24px; height:24px; display:flex; align-items:center; justify-content:center; padding:0 2px;`
+          : st === 'badge'
+          ? `min-width:26px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:12px; background:${this.hexA(col,.16)}; border:1px solid ${this.hexA(col,.5)}; padding:0 4px;`
+          : `width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:5px; background:${this.hexA(col,.18)}; border:1px solid ${this.hexA(col,.5)};`;
+        return { num:this.fmtNum(t), fg:col, wrap }; };
+      if (s.trayMode === 'all') trayItems = cores.slice(0, 8).map(c => mk(s.cores[c.idx].temp));
+      else if (s.trayMode === 'average') trayItems = [mk(avg)];
+      else trayItems = [mk(pkg)]; // highest / package
+    }
+
+    // start menu pinned
+    const palette = ['#caa15a','#5b8def','#6cb86c','#b86c9e','#5fc2c2','#d08a5a','#8a7de0','#d05f7a','#5aa0d0','#9ab85a','#c25fae','#5fd0a0'];
+    const names = ['Files','Browser','Mail','Photos','Settings','Store','Calendar','Music','Clock','Maps','Notes','Terminal'];
+    const pinned = [];
+    pinned.push({ name:'ARMTEMP', glyph:'°', bg:'linear-gradient(150deg,var(--accent),var(--accent-2))', on:this.openApp });
+    names.slice(0, 11).forEach((n, i) => pinned.push({ name:n, glyph:n[0], bg:palette[i], on:this.closeOverlays }));
+
+    const q = s.search.trim().toLowerCase();
+    const hasSearch = q.length > 0;
+    const hit = hasSearch && ('armtemp arm temp cpu core temperature snapdragon monitor heat thermal'.includes(q) || 'armtemp'.startsWith(q));
+
+    // settings nav
+    const tabDef = [['general','General'],['display','Display'],['notif','Notification area'],['over','Overheat protection'],['about','About']];
+    const tabs = tabDef.map(([id, label]) => ({ label, style:this.navItem(s.settingsTab===id), on:()=>this.setState({settingsTab:id}) }));
+
+    const trayModes = [
+      { id:'all', label:'All cores', sub:'One icon per core' },
+      { id:'highest', label:'Highest core', sub:'Hottest core only — less clutter' },
+      { id:'average', label:'Average', sub:'Mean across all cores' },
+      { id:'package', label:'Package', sub:'Overall CPU package temperature' },
+    ].map(m => ({ ...m, style:this.radioRow(s.trayMode===m.id), dot:this.radioDot(s.trayMode===m.id), on:()=>this.setState({trayMode:m.id}) }));
+
+    const overActions = [
+      { id:'notify', label:'Show a notification' },
+      { id:'sleep', label:'Put the PC to sleep' },
+      { id:'shutdown', label:'Shut down the PC' },
+    ].map(a => ({ ...a, style:this.radioRow(s.overAction===a.id), dot:this.radioDot(s.overAction===a.id), on:()=>this.setState({overAction:a.id}) }));
+
+    const chipList = this.chips.map((c, i) => ({ name:c.name, model:c.model, coreLabel:this.coreLabel(c), style:this.radioRow(i===s.chipIndex), dot:this.radioDot(i===s.chipIndex), on:()=>this.setChipIdx(i) }));
+
+    const ctx = s.ctx ? { ...s.ctx, items: s.ctx.items.map(it => it.sep ? { sep:true, isItem:false } : { ...it, sep:false, isItem:true, accel:it.accel||'', icon:it.icon||'', style:this.ctxItem() }) } : null;
+
+    const now = new Date();
+    const hh = now.getHours(); const m = now.getMinutes();
+    const clockTime = ((hh % 12) || 12) + ':' + String(m).padStart(2,'0') + ' ' + (hh < 12 ? 'AM' : 'PM');
+    const clockDate = (now.getMonth()+1) + '/' + now.getDate() + '/' + now.getFullYear();
+
+    return {
+      rootStyle: { position:'relative', width:'100vw', height:'100vh', overflow:'hidden', userSelect:'none',
+        fontFamily:"'Segoe UI Variable','Segoe UI',system-ui,-apple-system,sans-serif", color:'var(--text)', background:'var(--wall)', ...this.vars() },
+
+      chip: { name:chip.name, model:chip.model, ct: chip.clusters.reduce((a,c)=>a+c.n,0)+' / '+chip.clusters.reduce((a,c)=>a+c.n,0), coreLabel:this.coreLabel(chip) },
+      tjMaxStr: chip.tjMax + '°C', freqStr: (chip.base + (chip.boost-chip.base)*(maxLoad/100)).toFixed(2)+' GHz',
+      voltStr: (0.72 + 0.33*maxLoad/100).toFixed(3)+' V', powerStr: Math.round(chip.tdp*(0.2 + 0.8*avgLoad/100))+' W',
+
+      cores, rows, pkgStr:this.fmt(pkg), avgStr:this.fmt(avg), pkgColor:this.tcolor(pkg, chip.tjMax),
+      graphLine, graphArea,
+
+      showApp: s.appOpen && !s.appMin && !s.mini, mini:s.mini,
+      showTable: s.uiStyle === 'classic', showCardish: s.uiStyle !== 'classic', showGraph: s.uiStyle === 'dashboard',
+      zoomScale: s.zoom/100, win:s.win, miniPos:s.miniPos,
+      unitLabel: s.tempUnit === 'C' ? '°C' : '°F',
+
+      settingsOpen:s.settingsOpen, tabs,
+      tabGeneral:s.settingsTab==='general', tabDisplay:s.settingsTab==='display', tabNotif:s.settingsTab==='notif', tabOver:s.settingsTab==='over', tabAbout:s.settingsTab==='about',
+      rowS:'display:flex; align-items:center; justify-content:space-between; gap:18px; padding:12px 0; border-bottom:1px solid var(--border);',
+      rTitle:'font-size:12.5px; font-weight:500;', rSub:'font-size:11px; color:var(--text-3); margin-top:2px;',
+
+      sw: { startWin:this.swObj(s.startWithWindows), startMin:this.swObj(s.startMinimized), closeTray:this.swObj(s.closeToTray), followTheme:this.swObj(s.followTheme), trayOn:this.swObj(s.trayOn), overOn:this.swObj(s.overOn) },
+      tg: {
+        startWin:()=>this.setState(x=>({startWithWindows:!x.startWithWindows})),
+        startMin:()=>this.setState(x=>({startMinimized:!x.startMinimized})),
+        closeTray:()=>this.setState(x=>({closeToTray:!x.closeToTray})),
+        followTheme:()=>this.setState(x=>({followTheme:!x.followTheme})),
+        trayOn:()=>this.setState(x=>({trayOn:!x.trayOn})),
+        overOn:()=>this.setState(x=>({overOn:!x.overOn})),
+      },
+      unitSegC:this.segT(s.tempUnit==='C'), unitSegF:this.segT(s.tempUnit==='F'),
+      setUnitC:()=>this.setState({tempUnit:'C'}), setUnitF:()=>this.setState({tempUnit:'F'}),
+      uiSeg: { classic:this.segT(s.uiStyle==='classic'), cards:this.segT(s.uiStyle==='cards'), dashboard:this.segT(s.uiStyle==='dashboard') },
+      setUiClassic:()=>this.setState({uiStyle:'classic'}), setUiCards:()=>this.setState({uiStyle:'cards'}), setUiDash:()=>this.setState({uiStyle:'dashboard'}),
+      tbSeg: { per:this.segT(s.toolbarMode==='per-core'), avg:this.segT(s.toolbarMode==='average') },
+      setTbPer:()=>this.setState({toolbarMode:'per-core'}), setTbAvg:()=>this.setState({toolbarMode:'average'}),
+      zoomSeg: { z75:this.segT(s.zoom===75), z100:this.segT(s.zoom===100), z125:this.segT(s.zoom===125) },
+      setZoom75:()=>this.setState({zoom:75}), setZoom100:()=>this.setState({zoom:100}), setZoom125:()=>this.setState({zoom:125}),
+      trayModes,
+      tsSeg: { rounded:this.segBox(s.trayStyle==='rounded'), badge:this.segBox(s.trayStyle==='badge'), plain:this.segBox(s.trayStyle==='plain') },
+      setTsRounded:()=>this.setState({trayStyle:'rounded'}), setTsBadge:()=>this.setState({trayStyle:'badge'}), setTsPlain:()=>this.setState({trayStyle:'plain'}),
+      overActions, overTemp:s.overTemp, overTempStr:s.overTemp+'°C', onOverTemp:(e)=>this.setState({overTemp:+e.target.value}),
+      chipList,
+
+      startOpen:s.startOpen, search:s.search, onSearch:this.onSearch,
+      hasSearch, noSearch:!hasSearch, searchHit:hit, searchMiss:hasSearch && !hit, pinned,
+      trayOpen:s.trayOpen, trayIcons:trayItems,
+      ctx,
+
+      clockTime, clockDate,
+      taskUnderline: `position:absolute; bottom:1px; height:3px; border-radius:2px; transition:all .2s; width:${(s.appOpen&&!s.mini)?(s.appMin?'7px':'16px'):'7px'}; background:${(s.appOpen||s.mini)?'var(--accent)':'var(--text-3)'};`,
+
+      // demo controls
+      segLight:this.seg(!dark), segDark:this.seg(dark), setLight:()=>this.setState({theme:'light'}), setDark:()=>this.setState({theme:'dark'}),
+      segIdle:this.seg(s.load==='idle'), segHeavy:this.seg(s.load==='heavy'), setIdle:()=>this.setState({load:'idle'}), setHeavy:()=>this.setState({load:'heavy'}),
+
+      openApp:this.openApp, closeApp:this.closeApp, minApp:this.minApp, focusApp:this.focusApp,
+      clickTaskApp:this.clickTaskApp, toggleStart:this.toggleStart, toggleTray:this.toggleTray, toggleMini:this.toggleMini,
+      openOptions:this.openOptions, openTools:this.openTools, openHelp:this.openHelp, openModelMenu:this.openModelMenu,
+      closeSettings:this.closeSettings, closeOverlays:this.closeOverlays, stop:this.stop, toggleUnit:this.toggleUnit,
+      ctxTaskbar:this.ctxTaskbar, ctxTray:this.ctxTray, dragWin:this.dragWin, dragMini:this.dragMini,
+    };
+  }
+
+  coreLabel(c) { const n = c.clusters.reduce((a,x)=>a+x.n,0); return n + ' cores'; }
+  segBox(active) { return `font-size:11.5px; padding:7px 16px; border-radius:6px; cursor:pointer; border:1px solid ${active?'var(--accent)':'var(--border-2)'}; background:${active?'var(--accent-soft)':'var(--card)'}; color:${active?'var(--accent)':'var(--text-2)'}; font-weight:${active?600:400};`; }
+}
+</script>
+</body>
+</html>

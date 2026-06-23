@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default capability for the main ARMTEMP window",
+  "windows": ["main", "mini"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-close",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-title",
+    "core:event:default",
+    "core:tray:default",
+    "opener:default",
+    "autostart:default",
+    "notification:default",
+    "store:default"
+  ]
+}
