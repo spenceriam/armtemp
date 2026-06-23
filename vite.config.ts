@@ -15,6 +15,17 @@ export default defineConfig({
     host: "127.0.0.1",
     // Tauri 2 launches the browser via the dev URL; let it.
     fs: { strict: false },
+    watch: {
+      // Don't watch the Rust build output — its .dll/.exe are locked during
+      // cargo builds, which throws EBUSY on Windows. Only the React src matters.
+      ignored: [
+        "**/src-tauri/target/**",
+        "**/src-tauri/gen/**",
+        "**/node_modules/**",
+        "**/tools/**",
+        "**/claude-design-output/**",
+      ],
+    },
   },
   resolve: {
     alias: { "@": resolve(__dirname, "src") },
