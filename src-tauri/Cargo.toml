@@ -1,6 +1,6 @@
 [package]
 name = "armtemp"
-version = "2.0.4"
+version = "0.1.0"
 description = "Native Snapdragon X / X2 temperature monitor for Windows on ARM"
 authors = ["Spencer Francisco"]
 edition = "2021"

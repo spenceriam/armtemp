@@ -340,6 +340,7 @@ fn collect_snapshot(
         cores: cores_out,
         clock_mhz: cur_clock,
         max_clock_mhz: max_clock,
+        bus_speed_mhz: Some(100),
         power_w,
         tick: 0, // set by the scheduler
     })

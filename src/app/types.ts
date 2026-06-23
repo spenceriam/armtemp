@@ -1,4 +1,4 @@
-// Shared types mirroring the Rust SensorSnapshot (see src-tauri/src/sensors/types.rs).
+// Shared types mirroring the Rust SensorSnapshot (see src-tauri/src/sensors/types.ts).
 
 export type CoreKind = "performance" | "efficiency";
 
@@ -28,6 +28,7 @@ export interface SensorSnapshot {
   cores: CoreReading[];
   clock_mhz: number | null;
   max_clock_mhz: number | null;
+  bus_speed_mhz: number | null;
   power_w: number | null;
   tick: number;
 }
@@ -37,39 +38,65 @@ export type UiStyle = "classic" | "cards" | "dashboard";
 export type TrayMode = "all" | "highest" | "average" | "package";
 export type TrayStyle = "rounded" | "badge" | "plain";
 export type OverheatAction = "notify" | "sleep" | "shutdown";
+export type ThemeChoice = "system" | "dark" | "light";
+export type TaskbarMode = "per-core" | "average";
 
 export interface AppSettings {
+  // General
+  tempUnit: TempUnit;
   startWithWindows: boolean;
   startMinimized: boolean;
   closeToTray: boolean;
-  followTheme: boolean;
-  tempUnit: TempUnit;
+  alwaysOnTop: boolean;
+  hideWhenMinimized: boolean;
+  pollingIntervalMs: number;
+  // Display
   uiStyle: UiStyle;
-  toolbarMode: "per-core" | "average";
+  theme: ThemeChoice;
   zoom: 75 | 100 | 125;
+  statusBarOn: boolean;
+  colorCodeTemps: boolean;
+  // Notification Area
   trayOn: boolean;
   trayMode: TrayMode;
   trayStyle: TrayStyle;
+  trayTooltipAllCores: boolean;
+  // Windows Taskbar
+  taskbarOn: boolean;
+  taskbarMode: TaskbarMode;
+  taskbarAccent: boolean;
+  // Overheat
   overheatOn: boolean;
   overheatThreshold: number;
   overheatAction: OverheatAction;
-  theme: "dark" | "light";
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  // General — unit lives here (NOT in the main-window toolbar)
+  tempUnit: "C",
   startWithWindows: false,
   startMinimized: false,
   closeToTray: true,
-  followTheme: true,
-  tempUnit: "C",
+  alwaysOnTop: false,
+  hideWhenMinimized: false,
+  pollingIntervalMs: 1500,
+  // Display
   uiStyle: "classic",
-  toolbarMode: "per-core",
+  theme: "dark",
   zoom: 100,
+  statusBarOn: true,
+  colorCodeTemps: true,
+  // Notification Area — default tray mode = AVERAGE (per user spec)
   trayOn: true,
-  trayMode: "highest",
+  trayMode: "average",
   trayStyle: "rounded",
+  trayTooltipAllCores: true,
+  // Windows Taskbar
+  taskbarOn: true,
+  taskbarMode: "per-core",
+  taskbarAccent: true,
+  // Overheat
   overheatOn: false,
   overheatThreshold: 95,
   overheatAction: "notify",
-  theme: "dark",
 };

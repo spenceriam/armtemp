@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use sensors::{tray::{decide, TrayMode}, ChipProfile, PowerShellProvider, SensorSnapshot};
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{CheckMenuItem, Menu, MenuItem, Submenu},
     tray::TrayIconBuilder,
     Emitter, Manager, WindowEvent,
 };
@@ -45,7 +45,7 @@ struct AppSettings {
     overheat_threshold_c: f64,
 }
 fn default_c() -> String { "c".into() }
-fn default_tray_mode() -> String { "highest".into() }
+fn default_tray_mode() -> String { "average".into() }
 fn default_tray_style() -> String { "rounded".into() }
 fn default_overheat() -> f64 { 95.0 }
 
@@ -200,9 +200,42 @@ pub fn run() {
             let open = MenuItem::with_id(app, "open", "Open ARMTEMP", true, None::<&str>)?;
             let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let mini = MenuItem::with_id(app, "mini", "Mini-mode", true, None::<&str>)?;
+
+            // Tray-mode submenu (Average is the default per user spec).
+            let mode_h = MenuItem::with_id(app, "mode_h", "Highest core", true, None::<&str>)?;
+            let mode_a = CheckMenuItem::with_id(app, "mode_a", "Average", true, true, None::<&str>)?;
+            let mode_all = MenuItem::with_id(app, "mode_all", "All cores", true, None::<&str>)?;
+            let mode_pkg = MenuItem::with_id(app, "mode_pkg", "Package", true, None::<&str>)?;
+            let mode_menu = Submenu::with_items(
+                app,
+                "Tray mode",
+                true,
+                &[&mode_h, &mode_a, &mode_all, &mode_pkg],
+            )?;
+
+            // Unit submenu (°C / °F quick toggle — also in Settings → General).
+            let unit_c = CheckMenuItem::with_id(app, "unit_c", "°C", true, true, None::<&str>)?;
+            let unit_f = MenuItem::with_id(app, "unit_f", "°F", true, None::<&str>)?;
+            let unit_menu = Submenu::with_items(app, "Unit", true, &[&unit_c, &unit_f])?;
+
             let refresh = MenuItem::with_id(app, "refresh", "Refresh sensors", true, None::<&str>)?;
             let exit = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &settings_item, &mini, &refresh, &exit])?;
+            let sep1 = tauri::menu::PredefinedMenuItem::separator(app)?;
+            let sep2 = tauri::menu::PredefinedMenuItem::separator(app)?;
+            let menu = Menu::with_items(
+                app,
+                &[
+                    &open,
+                    &mini,
+                    &settings_item,
+                    &sep1,
+                    &mode_menu,
+                    &unit_menu,
+                    &sep2,
+                    &refresh,
+                    &exit,
+                ],
+            )?;
             let _tray = TrayIconBuilder::with_id("main-tray")
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
@@ -224,6 +257,38 @@ pub fn run() {
                     "mini" => {
                         if let Some(w) = app.get_webview_window("main") {
                             let _ = w.emit("toggle-mini", ());
+                        }
+                    }
+                    // Tray-mode quick switches — tell the frontend to persist + apply.
+                    "mode_h" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.emit("set-tray-mode", "highest");
+                        }
+                    }
+                    "mode_a" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.emit("set-tray-mode", "average");
+                        }
+                    }
+                    "mode_all" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.emit("set-tray-mode", "all");
+                        }
+                    }
+                    "mode_pkg" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.emit("set-tray-mode", "package");
+                        }
+                    }
+                    // Unit quick toggle.
+                    "unit_c" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.emit("set-unit", "C");
+                        }
+                    }
+                    "unit_f" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.emit("set-unit", "F");
                         }
                     }
                     "refresh" => {

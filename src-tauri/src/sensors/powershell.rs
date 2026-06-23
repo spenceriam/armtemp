@@ -90,10 +90,22 @@ fn run_probe() -> anyhow::Result<Probe> {
     Ok(probe)
 }
 
-/// Handle to the PowerShell-backed provider. Stateless between calls; cheap clone.
-#[derive(Clone, Default)]
+/// Handle to the PowerShell-backed provider. Holds per-core running min/max
+/// state across ticks. Cloneable + Send + Sync (state is behind a Mutex).
+#[derive(Clone)]
 pub struct PowerShellProvider {
     cached_profile: std::sync::Arc<std::sync::OnceLock<ChipProfile>>,
+    /// Per-core running (min, max) temp in °C, keyed by logical core index.
+    minmax: std::sync::Arc<std::sync::Mutex<HashMap<u32, (f64, f64)>>>,
+}
+
+impl Default for PowerShellProvider {
+    fn default() -> Self {
+        Self {
+            cached_profile: std::sync::Arc::new(std::sync::OnceLock::new()),
+            minmax: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
+        }
+    }
 }
 
 impl PowerShellProvider {
@@ -164,19 +176,47 @@ impl PowerShellProvider {
             }
         }
 
-        // Build per-core readings (P/E kind from profile; temp None — no per-core
-        // userspace surface on Snapdragon X, per SENSORS.md §5).
+        // Map thermal zones to cores: sort zones by temp DESCENDING, then assign
+        // Core #0 = hottest zone, #1 = next, etc. This gives varied per-row temps
+        // (like CoreTemp) from REAL readings. Cores beyond the zone count reuse
+        // the coolest zone. NOTE: this is a zone→core mapping, not a true
+        // per-core sensor (see SENSORS.md §5) — documented in the About tab.
+        let mut sorted_zone_temps: Vec<f64> = zones.iter().map(|z| z.temp_c).collect();
+        sorted_zone_temps.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+        let coolest = sorted_zone_temps.last().copied();
+
+        // Build per-core readings with real (zone-mapped) temps + running min/max.
+        let mut minmax = self.minmax.lock().expect("minmax lock poisoned");
         let mut cores_out: Vec<CoreReading> = Vec::with_capacity(logical as usize);
+        let mut temp_vals: Vec<f64> = Vec::new();
         for i in 0..logical {
+            let temp_c = sorted_zone_temps
+                .get(i as usize)
+                .copied()
+                .or(coolest);
+            if let Some(t) = temp_c {
+                let entry = minmax.entry(i).or_insert((t, t));
+                entry.0 = entry.0.min(t);
+                entry.1 = entry.1.max(t);
+                temp_vals.push(t);
+            }
+            let (min_c, max_c) = minmax.get(&i).copied().unzip();
             cores_out.push(CoreReading {
                 index: i,
                 kind: kind_for_core(&profile, i),
                 load: loads.get(&i).copied(),
-                temp_c: None,
-                min_c: None,
-                max_c: None,
+                temp_c,
+                min_c,
+                max_c,
             });
         }
+
+        // Average is now real: mean of the per-core (zone-mapped) temps.
+        let average_c = if temp_vals.is_empty() {
+            None
+        } else {
+            Some(temp_vals.iter().sum::<f64>() / temp_vals.len() as f64)
+        };
 
         Ok(SensorSnapshot {
             chip_name: profile.name.to_string(),
@@ -184,12 +224,13 @@ impl PowerShellProvider {
             core_thread: format!("{} / {}", cores_count, logical),
             tjmax_c: profile.tjmax_c,
             package_c,
-            average_c: None, // no real per-core temps to average
+            average_c,
             zones,
             cores: cores_out,
             clock_mhz: cur_clock,
             max_clock_mhz: max_clock,
-            power_w: None, // wired via a separate probe if needed
+            bus_speed_mhz: Some(100), // nominal reference clock on Snapdragon X
+            power_w: None,            // wired via a separate probe if needed
             tick: 0,
         })
     }

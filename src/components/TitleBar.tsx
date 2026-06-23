@@ -4,14 +4,11 @@ import { AppIcon } from "./AppIcon";
 interface Props {
   version: string;
   onOpenSettings: () => void;
-  unitLabel: string;
-  onToggleUnit: () => void;
 }
 
-// Frameless window titlebar. The drag region uses Tauri's data-tauri-drag-region.
-// Window controls call the real window APIs (minimize/close). Close is
-// intercepted in Rust for close-to-tray behavior.
-export function TitleBar({ version, onOpenSettings, unitLabel, onToggleUnit }: Props) {
+// Frameless window titlebar. Unit (°C/°F) is NOT here — it lives in Settings →
+// General. The menu bar is just Tools / Options / Help.
+export function TitleBar({ version, onOpenSettings }: Props) {
   const win = getCurrentWindow();
   return (
     <div className="titlebar">
@@ -25,29 +22,18 @@ export function TitleBar({ version, onOpenSettings, unitLabel, onToggleUnit }: P
         <div className="titlebar-spacer" />
       </div>
 
-      {/* Menu bar (Options / Tools / Help) + unit toggle, lifted from the design. */}
+      {/* Menu bar — Tools / Options / Help. No unit toggle. */}
       <div className="menubar">
-        <button className="menu-item" onClick={onOpenSettings}>
-          Options
-        </button>
-        <button
-          className="menu-item"
-          onClick={() => onOpenSettings()}
-          title="Notification area settings"
-        >
+        <button className="menu-item" onClick={onOpenSettings} title="Tools">
           Tools
         </button>
-        <button
-          className="menu-item"
-          onClick={() => onOpenSettings()}
-          title="About"
-        >
+        <button className="menu-item" onClick={onOpenSettings} title="Options / Settings">
+          Options
+        </button>
+        <button className="menu-item" onClick={onOpenSettings} title="About">
           Help
         </button>
         <div className="menubar-spacer" />
-        <button className="unit-pill" onClick={onToggleUnit} title="Toggle °C / °F">
-          {unitLabel}
-        </button>
       </div>
 
       <div className="window-controls">

@@ -4,50 +4,53 @@ interface Props {
   snap: SensorSnapshot | null;
 }
 
-// The processor identity card. All values are REAL: chip name/model from
-// Win32_Processor, clocks from WMI, power from the Power Meter counter.
-// Where a real source is missing the field shows "—" honestly.
-// Voltage is not exposed by any userspace surface on Snapdragon X — honest "—".
+// The dense Processor Information block — a bordered 2-column field/value grid
+// matching CoreTemp's layout exactly. All values are REAL; VID shows "—"
+// honestly (no userspace surface for voltage on Snapdragon X).
 export function ProcessorInfo({ snap }: Props) {
-  const tjMaxStr = snap ? `${snap.tjmax_c}°C` : "—";
   const freqStr = (() => {
     if (!snap) return "—";
-    const max = snap.max_clock_mhz ?? 0;
     const cur = snap.clock_mhz ?? 0;
-    return `${(cur / 1000).toFixed(2)} GHz${max ? ` · ${max} MHz max` : ""}`;
+    return `${(cur / 1000).toFixed(2)} GHz`;
   })();
-  const voltStr = "—";
+  const maxFreqStr = snap?.max_clock_mhz ? `${(snap.max_clock_mhz / 1000).toFixed(2)} GHz` : "—";
+  const busStr = snap?.bus_speed_mhz != null ? `${snap.bus_speed_mhz} MHz` : "—";
   const powerStr = snap?.power_w != null ? `${Math.round(snap.power_w)} W` : "—";
 
-  const name = snap?.chip_name ?? "Detecting…";
-  const model = snap?.chip_model ?? "";
-  const ct = snap?.core_thread ?? "— / —";
-  const coreLabel = snap ? `${snap.cores.length} cores` : "";
+  const avgLoad = (() => {
+    if (!snap) return null;
+    const loads = snap.cores.map((c) => c.load).filter((l): l is number => l !== null);
+    if (!loads.length) return null;
+    return Math.round(loads.reduce((a, b) => a + b, 0) / loads.length);
+  })();
 
   return (
-    <div className="card proc-card">
-      <div className="proc-head">
-        <div className="proc-name">{name}</div>
-        <div className="proc-model">{model}</div>
-        <div className="proc-badge">{coreLabel}</div>
-      </div>
-      <div className="proc-grid">
-        <Row label="Platform" value="ARM64 · Oryon" />
-        <Row label="Tj. Max" value={tjMaxStr} />
-        <Row label="Frequency" value={freqStr} />
-        <Row label="Voltage" value={voltStr} />
-        <Row label="Cores / Threads" value={ct} />
-        <Row label="Power" value={powerStr} />
+    <div className="proc-section">
+      <div className="section-label">Processor Information</div>
+      <div className="card proc-card">
+        <Field label="Processor" value={snap?.chip_name ?? "Detecting…"} full />
+        <Field label="Platform" value="ARM64 · Oryon" />
+        <Field label="Vendor ID" value="Qualcomm Technologies Inc" />
+        <Field label="CPUID" value={snap?.chip_model ?? "—"} />
+        <Field label="Cores" value={snap ? `${snap.cores.length} (Performance)` : "—"} />
+        <Field label="Threads" value={snap ? String(snap.cores.length) : "—"} />
+        <Field label="Frequency" value={freqStr} />
+        <Field label="Max" value={maxFreqStr} />
+        <Field label="Bus speed" value={busStr} />
+        <Field label="Tj. Max" value={snap ? `${snap.tjmax_c}°C` : "—"} />
+        <Field label="VID" value="—" />
+        <Field label="Load" value={avgLoad !== null ? `${avgLoad} %` : "—"} />
+        <Field label="Power" value={powerStr} />
       </div>
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Field({ label, value, full }: { label: string; value: string; full?: boolean }) {
   return (
-    <div className="proc-row">
-      <span className="proc-row-label">{label}</span>
-      <span className="proc-row-value">{value}</span>
+    <div className={`proc-field ${full ? "full" : ""}`}>
+      <span className="proc-field-label">{label}</span>
+      <span className="proc-field-value">{value}</span>
     </div>
   );
 }
