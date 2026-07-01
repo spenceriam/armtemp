@@ -1,148 +1,173 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   AppSettings,
   UiStyle,
   TrayMode,
   TrayStyle,
-  OverheatAction,
-  TempUnit,
   ThemeChoice,
   TaskbarMode,
 } from "../app/types";
-import { ChipsList } from "./ChipsList";
 
-type Tab = "general" | "display" | "notif" | "taskbar" | "over" | "about";
+type Tab = "general" | "display" | "notif" | "taskbar";
 
 interface Props {
   settings: AppSettings;
   update: (patch: Partial<AppSettings>) => void;
-  tjmax: number;
   onClose: () => void;
 }
 
-// The 6-tab settings dialog, matching the CoreTemp layout. The Temperature unit
-// lives in the General tab (NOT in the main-window toolbar).
-export function SettingsDialog({ settings, update, tjmax, onClose }: Props) {
+// Classic Win32-style tabbed Settings dialog, modeled on real Core Temp:
+// top tab strip, native checkboxes/radios/selects inside etched group boxes,
+// and OK / Cancel / Apply buttons. Changes apply live (that's how the app
+// works everywhere); Cancel reverts to the state captured when the dialog
+// opened (or when Apply was last pressed) — genuine dialog semantics.
+export function SettingsDialog({ settings, update, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("general");
+  const baseline = useRef<AppSettings>(settings);
+
   const tabs: [Tab, string][] = [
     ["general", "General"],
     ["display", "Display"],
-    ["notif", "Notification area"],
+    ["notif", "Notification Area"],
     ["taskbar", "Windows Taskbar"],
-    ["over", "Overheat protection"],
-    ["about", "About"],
   ];
 
+  const cancel = () => {
+    update(baseline.current);
+    onClose();
+  };
+  const apply = () => {
+    baseline.current = settings;
+  };
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={cancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-titlebar">
-          <span className="modal-title">⚙ ARMTEMP — Settings</span>
+          <span className="modal-title">Settings</span>
           <div className="modal-spacer" />
-          <button className="win-btn close-btn" onClick={onClose}>
+          <button className="win-btn close-btn" onClick={cancel}>
             ✕
           </button>
         </div>
-        <div className="modal-body">
-          <div className="settings-nav">
-            {tabs.map(([id, label]) => (
-              <button
-                key={id}
-                className={`nav-item ${tab === id ? "active" : ""}`}
-                onClick={() => setTab(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="settings-content">
-            {tab === "general" && <GeneralTab settings={settings} update={update} />}
-            {tab === "display" && <DisplayTab settings={settings} update={update} />}
-            {tab === "notif" && <NotifTab settings={settings} update={update} />}
-            {tab === "taskbar" && <TaskbarTab settings={settings} update={update} />}
-            {tab === "over" && <OverheatTab settings={settings} update={update} tjmax={tjmax} />}
-            {tab === "about" && <AboutTab />}
-          </div>
+
+        <div className="tabstrip">
+          {tabs.map(([id, label]) => (
+            <button
+              key={id}
+              className={`tab ${tab === id ? "active" : ""}`}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="tab-panel">
+          {tab === "general" && <GeneralTab settings={settings} update={update} />}
+          {tab === "display" && <DisplayTab settings={settings} update={update} />}
+          {tab === "notif" && <NotifTab settings={settings} update={update} />}
+          {tab === "taskbar" && <TaskbarTab settings={settings} update={update} />}
+        </div>
+
+        <div className="dlg-buttons">
+          <button className="btn" onClick={onClose}>
+            OK
+          </button>
+          <button className="btn" onClick={cancel}>
+            Cancel
+          </button>
+          <button className="btn" onClick={apply}>
+            Apply
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-// --- reusable controls ---
+// --- native-style controls ---
 
-function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+function Check({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
-    <div className={`switch ${on ? "on" : ""}`} onClick={onClick}>
-      <div className="switch-knob" />
-    </div>
+    <label className="chk-row">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span>{label}</span>
+    </label>
   );
 }
 
-function Row({ title, sub, children }: { title: string; sub: string; children: React.ReactNode }) {
+function Radio<T extends string>({
+  name,
+  value,
+  current,
+  label,
+  onChange,
+}: {
+  name: string;
+  value: T;
+  current: T;
+  label: string;
+  onChange: (v: T) => void;
+}) {
   return (
-    <div className="settings-row">
-      <div>
-        <div className="row-title">{title}</div>
-        <div className="row-sub">{sub}</div>
-      </div>
-      {children}
-    </div>
+    <label className="chk-row">
+      <input
+        type="radio"
+        name={name}
+        checked={current === value}
+        onChange={() => onChange(value)}
+      />
+      <span>{label}</span>
+    </label>
   );
 }
 
-function SectionHead({ children }: { children: React.ReactNode }) {
-  return <div className="subhead">{children}</div>;
-}
-
-function Seg<T extends string | number>({
+function SelectRow<T extends string | number>({
+  label,
   value,
   options,
   onChange,
 }: {
+  label: string;
   value: T;
   options: [T, string][];
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="seg">
-      {options.map(([v, label]) => (
-        <button
-          key={String(v)}
-          className={`seg-btn ${value === v ? "active" : ""}`}
-          onClick={() => onChange(v)}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <label className="select-row">
+      <span>{label}</span>
+      <select
+        value={String(value)}
+        onChange={(e) => {
+          const raw = e.target.value;
+          const match = options.find(([v]) => String(v) === raw);
+          if (match) onChange(match[0]);
+        }}
+      >
+        {options.map(([v, text]) => (
+          <option key={String(v)} value={String(v)}>
+            {text}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
-function RadioGroup<T extends string>({
-  value,
-  options,
-  onChange,
-}: {
-  value: T;
-  options: [T, string, string?][];
-  onChange: (v: T) => void;
-}) {
+function Group({ legend, children }: { legend: string; children: React.ReactNode }) {
   return (
-    <div className="radio-group">
-      {options.map(([v, label, sub]) => (
-        <button
-          key={v}
-          className={`radio ${value === v ? "active" : ""}`}
-          onClick={() => onChange(v)}
-        >
-          <div className={`radio-dot ${value === v ? "active" : ""}`} />
-          <div>
-            <div className="radio-label">{label}</div>
-            {sub && <div className="radio-sub">{sub}</div>}
-          </div>
-        </button>
-      ))}
+    <div className="groupbox dlg-group">
+      <span className="groupbox-legend">{legend}</span>
+      {children}
     </div>
   );
 }
@@ -158,56 +183,38 @@ function GeneralTab({
 }) {
   return (
     <>
-      <h3>General</h3>
-      <SectionHead>Startup</SectionHead>
-      <Row title="Start ARMTEMP when Windows starts" sub="Launch automatically at sign-in">
-        <Toggle on={settings.startWithWindows} onClick={() => update({ startWithWindows: !settings.startWithWindows })} />
-      </Row>
-      <Row title="Start minimized to the notification area" sub="Go straight to the tray">
-        <Toggle on={settings.startMinimized} onClick={() => update({ startMinimized: !settings.startMinimized })} />
-      </Row>
-
-      <SectionHead>Window</SectionHead>
-      <Row title="Close to the notification area" sub="Closing the window keeps it running">
-        <Toggle on={settings.closeToTray} onClick={() => update({ closeToTray: !settings.closeToTray })} />
-      </Row>
-      <Row title="Always on top" sub="Keep the window above others">
-        <Toggle on={settings.alwaysOnTop} onClick={() => update({ alwaysOnTop: !settings.alwaysOnTop })} />
-      </Row>
-      <Row title="Hide when minimized" sub="Minimizing sends it to the tray">
-        <Toggle on={settings.hideWhenMinimized} onClick={() => update({ hideWhenMinimized: !settings.hideWhenMinimized })} />
-      </Row>
-
-      {/* Temperature unit — its primary home. Not in the main toolbar. */}
-      <SectionHead>Temperature unit</SectionHead>
-      <Row title="Display readings in" sub="Applies to the table, status bar, and tray">
-        <Seg<TempUnit>
-          value={settings.tempUnit}
-          options={[
-            ["C", "°C"],
-            ["F", "°F"],
-          ]}
-          onChange={(v) => update({ tempUnit: v })}
+      <Group legend="Startup">
+        <Check
+          label="Start ARMTEMP with Windows"
+          checked={settings.startWithWindows}
+          onChange={(v) => update({ startWithWindows: v })}
         />
-      </Row>
-
-      <SectionHead>Polling interval</SectionHead>
-      <div className="slider-block">
-        <div className="slider-head">
-          <span className="row-title">Refresh rate</span>
-          <span className="slider-val">{settings.pollingIntervalMs} ms</span>
-        </div>
-        <input
-          type="range"
-          min={500}
-          max={5000}
-          step={250}
-          value={settings.pollingIntervalMs}
-          onChange={(e) => update({ pollingIntervalMs: Number(e.target.value) })}
-          className="slider"
+        <Check
+          label="Start ARMTEMP minimized"
+          checked={settings.startMinimized}
+          onChange={(v) => update({ startMinimized: v })}
         />
-        <div className="slider-hint">500 ms — 5000 ms (lower = more responsive, higher = less CPU)</div>
-      </div>
+      </Group>
+      <Group legend="Polling">
+        <label className="select-row">
+          <span>Temperature polling interval</span>
+          <span className="num-wrap">
+            <input
+              type="number"
+              className="num-input"
+              min={500}
+              max={5000}
+              step={250}
+              value={settings.pollingIntervalMs}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (Number.isFinite(n)) update({ pollingIntervalMs: n });
+              }}
+            />
+            <span className="num-unit">ms</span>
+          </span>
+        </label>
+      </Group>
     </>
   );
 }
@@ -221,21 +228,41 @@ function DisplayTab({
 }) {
   return (
     <>
-      <h3>Display</h3>
-      <SectionHead>Main window layout</SectionHead>
-      <RadioGroup<UiStyle>
-        value={settings.uiStyle}
-        onChange={(v) => update({ uiStyle: v })}
-        options={[
-          ["classic", "Classic", "Table with Core / Temp / Low / High / Load"],
-          ["cards", "Cards", "Grid of per-core tiles"],
-          ["dashboard", "Dashboard", "Package graph + cards"],
-        ]}
-      />
-
-      <SectionHead>Window theme</SectionHead>
-      <Row title="Color scheme" sub="System follows the Windows theme">
-        <Seg<ThemeChoice>
+      <Group legend="Settings">
+        <Check
+          label="Display temperatures in Fahrenheit"
+          checked={settings.tempUnit === "F"}
+          onChange={(v) => update({ tempUnit: v ? "F" : "C" })}
+        />
+        <Check
+          label="Close ARMTEMP to the notification area"
+          checked={settings.closeToTray}
+          onChange={(v) => update({ closeToTray: v })}
+        />
+        <Check
+          label="Hide when minimized"
+          checked={settings.hideWhenMinimized}
+          onChange={(v) => update({ hideWhenMinimized: v })}
+        />
+        <Check
+          label="Always on top"
+          checked={settings.alwaysOnTop}
+          onChange={(v) => update({ alwaysOnTop: v })}
+        />
+        <Check
+          label="Show status bar"
+          checked={settings.statusBarOn}
+          onChange={(v) => update({ statusBarOn: v })}
+        />
+        <Check
+          label="Color-code temperatures"
+          checked={settings.colorCodeTemps}
+          onChange={(v) => update({ colorCodeTemps: v })}
+        />
+      </Group>
+      <Group legend="Appearance">
+        <SelectRow<ThemeChoice>
+          label="Color scheme"
           value={settings.theme}
           options={[
             ["system", "System"],
@@ -244,11 +271,18 @@ function DisplayTab({
           ]}
           onChange={(v) => update({ theme: v })}
         />
-      </Row>
-
-      <SectionHead>Window zoom</SectionHead>
-      <Row title="Scale the window" sub="For HiDPI or readability">
-        <Seg
+        <SelectRow<UiStyle>
+          label="View"
+          value={settings.uiStyle}
+          options={[
+            ["classic", "Classic"],
+            ["cards", "Cards"],
+            ["dashboard", "Dashboard"],
+          ]}
+          onChange={(v) => update({ uiStyle: v })}
+        />
+        <SelectRow
+          label="Window size"
           value={settings.zoom}
           options={[
             [75, "75%"],
@@ -257,15 +291,7 @@ function DisplayTab({
           ]}
           onChange={(v) => update({ zoom: v as 75 | 100 | 125 })}
         />
-      </Row>
-
-      <SectionHead>Status bar & colors</SectionHead>
-      <Row title="Show status bar" sub="CPU Temp / Avg / Low / High in the footer">
-        <Toggle on={settings.statusBarOn} onClick={() => update({ statusBarOn: !settings.statusBarOn })} />
-      </Row>
-      <Row title="Color-code temperatures" sub="Green → yellow → orange → red by Tj. Max proximity">
-        <Toggle on={settings.colorCodeTemps} onClick={() => update({ colorCodeTemps: !settings.colorCodeTemps })} />
-      </Row>
+      </Group>
     </>
   );
 }
@@ -279,26 +305,51 @@ function NotifTab({
 }) {
   return (
     <>
-      <h3>Notification area</h3>
-      <Row title="Show ARMTEMP in the notification area" sub="Live tray icon">
-        <Toggle on={settings.trayOn} onClick={() => update({ trayOn: !settings.trayOn })} />
-      </Row>
-
-      <SectionHead>Tray icon displays</SectionHead>
-      <RadioGroup<TrayMode>
-        value={settings.trayMode}
-        onChange={(v) => update({ trayMode: v })}
-        options={[
-          ["highest", "Highest core", "Hottest single reading"],
-          ["average", "Average", "Mean across all cores"],
-          ["all", "All cores", "One icon per core"],
-          ["package", "Package", "Overall CPU package"],
-        ]}
-      />
-
-      <SectionHead>Icon style</SectionHead>
-      <Row title="Tray icon shape" sub="Visual treatment of the temperature badge">
-        <Seg<TrayStyle>
+      <Group legend="Notification area icon">
+        <Check
+          label="Show ARMTEMP in the notification area"
+          checked={settings.trayOn}
+          onChange={(v) => update({ trayOn: v })}
+        />
+        <Check
+          label="Show all core temperatures in the tooltip"
+          checked={settings.trayTooltipAllCores}
+          onChange={(v) => update({ trayTooltipAllCores: v })}
+        />
+      </Group>
+      <Group legend="Icon displays">
+        <Radio<TrayMode>
+          name="trayMode"
+          value="highest"
+          current={settings.trayMode}
+          label="Highest core temperature"
+          onChange={(v) => update({ trayMode: v })}
+        />
+        <Radio<TrayMode>
+          name="trayMode"
+          value="average"
+          current={settings.trayMode}
+          label="Average of all cores"
+          onChange={(v) => update({ trayMode: v })}
+        />
+        <Radio<TrayMode>
+          name="trayMode"
+          value="all"
+          current={settings.trayMode}
+          label="All cores (hottest shown)"
+          onChange={(v) => update({ trayMode: v })}
+        />
+        <Radio<TrayMode>
+          name="trayMode"
+          value="package"
+          current={settings.trayMode}
+          label="Package temperature"
+          onChange={(v) => update({ trayMode: v })}
+        />
+      </Group>
+      <Group legend="Icon style">
+        <SelectRow<TrayStyle>
+          label="Badge style"
           value={settings.trayStyle}
           options={[
             ["rounded", "Rounded"],
@@ -307,12 +358,7 @@ function NotifTab({
           ]}
           onChange={(v) => update({ trayStyle: v })}
         />
-      </Row>
-
-      <SectionHead>Tray tooltip</SectionHead>
-      <Row title="Show all core temps on hover" sub="Avg · High · Low in the tooltip">
-        <Toggle on={settings.trayTooltipAllCores} onClick={() => update({ trayTooltipAllCores: !settings.trayTooltipAllCores })} />
-      </Row>
+      </Group>
     </>
   );
 }
@@ -326,98 +372,34 @@ function TaskbarTab({
 }) {
   return (
     <>
-      <h3>Windows Taskbar</h3>
-      <Row title="Show temperature on the taskbar button" sub="Live reading on the ARMTEMP taskbar icon">
-        <Toggle on={settings.taskbarOn} onClick={() => update({ taskbarOn: !settings.taskbarOn })} />
-      </Row>
-
-      <SectionHead>Taskbar shows</SectionHead>
-      <Row title="Reading mode" sub="Per-core or a combined average">
-        <Seg<TaskbarMode>
-          value={settings.taskbarMode}
-          options={[
-            ["per-core", "Per-core"],
-            ["average", "Average"],
-          ]}
+      <Group legend="Taskbar button">
+        <Check
+          label="Show temperature on the taskbar button"
+          checked={settings.taskbarOn}
+          onChange={(v) => update({ taskbarOn: v })}
+        />
+        <Check
+          label="Use accent color background"
+          checked={settings.taskbarAccent}
+          onChange={(v) => update({ taskbarAccent: v })}
+        />
+      </Group>
+      <Group legend="Button displays">
+        <Radio<TaskbarMode>
+          name="taskbarMode"
+          value="per-core"
+          current={settings.taskbarMode}
+          label="Hottest core temperature"
           onChange={(v) => update({ taskbarMode: v })}
         />
-      </Row>
-
-      <SectionHead>Button appearance</SectionHead>
-      <Row title="Use accent color background" sub="Blue tile behind the temperature">
-        <Toggle on={settings.taskbarAccent} onClick={() => update({ taskbarAccent: !settings.taskbarAccent })} />
-      </Row>
-    </>
-  );
-}
-
-function OverheatTab({
-  settings,
-  update,
-  tjmax,
-}: {
-  settings: AppSettings;
-  update: (p: Partial<AppSettings>) => void;
-  tjmax: number;
-}) {
-  return (
-    <>
-      <h3>Overheat protection</h3>
-      <Row title="Enable overheat protection" sub="Take action when a core gets too hot">
-        <Toggle on={settings.overheatOn} onClick={() => update({ overheatOn: !settings.overheatOn })} />
-      </Row>
-
-      <div className="slider-block">
-        <div className="slider-head">
-          <span className="row-title">Warning threshold</span>
-          <span className="slider-val">{settings.overheatThreshold}°C</span>
-        </div>
-        <input
-          type="range"
-          min={70}
-          max={Math.min(105, Math.round(tjmax))}
-          step={1}
-          value={settings.overheatThreshold}
-          onChange={(e) => update({ overheatThreshold: Number(e.target.value) })}
-          className="slider"
+        <Radio<TaskbarMode>
+          name="taskbarMode"
+          value="average"
+          current={settings.taskbarMode}
+          label="Average of all cores"
+          onChange={(v) => update({ taskbarMode: v })}
         />
-        <div className="slider-hint">70°C ────────────────── {Math.min(105, Math.round(tjmax))}°C (Tj. Max)</div>
-        <div className="slider-hint">Recommended: ~5°C below Tj. Max ({tjmax}°C)</div>
-      </div>
-
-      <SectionHead>When threshold exceeded</SectionHead>
-      <RadioGroup<OverheatAction>
-        value={settings.overheatAction}
-        onChange={(v) => update({ overheatAction: v })}
-        options={[
-          ["notify", "Show a notification"],
-          ["sleep", "Put the PC to sleep"],
-          ["shutdown", "Shut down the PC"],
-        ]}
-      />
-    </>
-  );
-}
-
-function AboutTab() {
-  return (
-    <>
-      <h3>About</h3>
-      <div className="about-head">
-        <div className="about-logo">°</div>
-        <div>
-          <div className="about-name">ARMTEMP</div>
-          <div className="about-version">Version 0.1.0 · ARM64 build · Tauri</div>
-        </div>
-      </div>
-      <SectionHead>Detected processor</SectionHead>
-      <ChipsList />
-      <p className="about-note">
-        Temperatures read from on-die thermal sensors via ACPI thermal zones. Per-core
-        temps are real zone readings mapped to cores (not true per-core sensors on this
-        firmware). ARMTEMP is an independent monitoring utility and is not affiliated
-        with any silicon vendor.
-      </p>
+      </Group>
     </>
   );
 }

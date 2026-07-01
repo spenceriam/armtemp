@@ -9,6 +9,7 @@ export interface CoreReading {
   temp_c: number | null;
   min_c: number | null;
   max_c: number | null;
+  avg_c: number | null;
 }
 
 export interface ZoneReading {
@@ -21,6 +22,9 @@ export interface SensorSnapshot {
   chip_name: string;
   chip_model: string;
   core_thread: string;
+  platform: string;
+  lithography: string;
+  tdp_w: number | null;
   tjmax_c: number;
   package_c: number | null;
   average_c: number | null;

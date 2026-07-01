@@ -22,9 +22,9 @@ ARMTEMP reads real on-die thermal sensors and displays package + multi-zone temp
 
 Reading temperatures on Snapdragon X under Windows is genuinely hard — the standard WMI classes (`MSAcpi_ThermalZoneTemperature`, `Win32_TemperatureProbe`) return **nothing** on this firmware, and LibreHardwareMonitor has no native Oryon support.
 
-ARMTEMP's working data source is the **`Win32_PerfFormattedData_Counters_ThermalZoneInformation`** performance counter, which exposes 36 ACPI thermal zones (`\_SB.TZxx`). Sentinels/inactive zones (≤ 0 °C) are filtered out; the rest are converted from Kelvin to °C. The hottest valid zone is reported as the package temperature.
+ARMTEMP's working data source is the **`Thermal Zone Information`** performance-counter object, which exposes ACPI thermal zones (`\_SB.TZxx`). Sentinels/inactive zones (≤ 0 °C) are filtered out; the rest are converted from Kelvin to °C. The hottest valid zone is reported as the package temperature.
 
-**Implementation note:** the Rust `wmi` crate's COM/`IWbemServices` path fails with `WBEM_E_NOT_FOUND` when called from inside a Tauri process (it works fine from PowerShell and standalone binaries — see [`SENSORS.md`](./SENSORS.md) §7). ARMTEMP therefore runs `Get-CimInstance` via PowerShell once per poll tick (~2s) and parses the JSON. This is the proven Phase 0 mechanism and yields complete, real data.
+**Implementation note:** ARMTEMP reads these counters natively via the Windows **PDH** (Performance Data Helper) API (`pdh.dll`) — no subprocess, no COM/WMI. This also sidesteps the failure the Rust `wmi` crate's COM/`IWbemServices` path hit when called from inside a Tauri process (`WBEM_E_NOT_FOUND`; see [`SENSORS.md`](./SENSORS.md) §7 for that history). A dedicated worker thread owns the PDH query handles and collects once per poll tick (~1.5–2s); the same counters also yield a genuinely *live* CPU frequency, unlike `Win32_Processor.CurrentClockSpeed`, which mirrors the static max on this firmware.
 
 ---
 
@@ -68,7 +68,7 @@ armtemp/
 
 ## Design parity
 
-Ported 1:1 from the mockup's visuals: the dark/light theme palette and Mica translucency, accent + shade color helpers, the green→yellow→orange→red temperature color scale, the Classic per-core table, the Cards grid, the Dashboard sparkline, mini-mode, the 5-tab settings dialog (General / Display / Notification area / Overheat protection / About), and the tray icon with its context menu. Dropped (provided by Windows itself now): the simulated desktop/taskbar/Start-menu chrome and the random data generator.
+Recreates Core Temp's actual desktop layout — native title bar and window chrome (no custom-drawn frame, no transparency/blur), a real File/Options/Tools/Help menu bar, a Select CPU combo, Win32-style etched group boxes with sunken read-only value fields for Processor Information, and a Temperature Readings table with colored temperature text (no dots/bars) — while keeping our own dark/light theming (real Core Temp has none), the accent + shade color helpers, the green→yellow→orange→red temperature color scale, the Cards grid, the Dashboard sparkline, a chrome-less mini-mode, a classic tabbed Settings dialog (General / Display / Notification Area / Windows Taskbar — native checkboxes, OK/Cancel/Apply) with separate Overheat protection (Options menu) and About (Help menu) dialogs, and the tray icon with its context menu. Dropped (provided by Windows itself now): the simulated desktop/taskbar/Start-menu chrome and the random data generator.
 
 ---
 

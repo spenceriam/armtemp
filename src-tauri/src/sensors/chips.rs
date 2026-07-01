@@ -24,6 +24,12 @@ pub struct ChipProfile {
     pub boost_ghz: f64,
     /// Nominal TDP in watts (informational).
     pub tdp_w: u32,
+    /// Microarchitecture label, e.g. "Oryon" (X/X Plus/X Elite) or "Oryon 2" (X2 family).
+    /// Empty string for the generic/unknown fallback profile.
+    pub uarch: &'static str,
+    /// Process node, e.g. "4 nm" (spec label describing the detected chip
+    /// model — not a live telemetry reading). Empty for the generic fallback.
+    pub lithography: &'static str,
 }
 
 impl ChipProfile {
@@ -44,6 +50,8 @@ pub static CHIPS: &[ChipProfile] = &[
         boost_ghz: 3.0,
         tdp_w: 23,
         clusters: &[(CoreKind::Performance, 8)],
+        uarch: "Oryon",
+        lithography: "4 nm",
     },
     ChipProfile {
         id: "XP",
@@ -56,6 +64,8 @@ pub static CHIPS: &[ChipProfile] = &[
         boost_ghz: 3.4,
         tdp_w: 28,
         clusters: &[(CoreKind::Performance, 10)],
+        uarch: "Oryon",
+        lithography: "4 nm",
     },
     ChipProfile {
         id: "XP8",
@@ -68,6 +78,8 @@ pub static CHIPS: &[ChipProfile] = &[
         boost_ghz: 4.0,
         tdp_w: 30,
         clusters: &[(CoreKind::Performance, 8)],
+        uarch: "Oryon",
+        lithography: "4 nm",
     },
     ChipProfile {
         id: "XE",
@@ -79,17 +91,8 @@ pub static CHIPS: &[ChipProfile] = &[
         boost_ghz: 4.0,
         tdp_w: 37,
         clusters: &[(CoreKind::Performance, 12)],
-    },
-    ChipProfile {
-        id: "X2",
-        name: "Snapdragon X2",
-        model_match: "x2-46",
-        model: "X2-46-100",
-        tjmax_c: 105.0,
-        base_ghz: 3.4,
-        boost_ghz: 3.6,
-        tdp_w: 25,
-        clusters: &[(CoreKind::Performance, 6), (CoreKind::Efficiency, 6)],
+        uarch: "Oryon",
+        lithography: "4 nm",
     },
     ChipProfile {
         id: "X2P",
@@ -101,6 +104,8 @@ pub static CHIPS: &[ChipProfile] = &[
         boost_ghz: 4.2,
         tdp_w: 40,
         clusters: &[(CoreKind::Performance, 8), (CoreKind::Efficiency, 8)],
+        uarch: "Oryon 2",
+        lithography: "3 nm",
     },
     ChipProfile {
         id: "X2E",
@@ -112,6 +117,8 @@ pub static CHIPS: &[ChipProfile] = &[
         boost_ghz: 5.0,
         tdp_w: 50,
         clusters: &[(CoreKind::Performance, 12), (CoreKind::Efficiency, 6)],
+        uarch: "Oryon 2",
+        lithography: "3 nm",
     },
 ];
 
@@ -153,5 +160,7 @@ pub fn match_profile(detected_name_lower: &str, core_count: u32) -> ChipProfile 
         boost_ghz: 0.0,
         tdp_w: 0,
         clusters,
+        uarch: "",
+        lithography: "",
     }
 }

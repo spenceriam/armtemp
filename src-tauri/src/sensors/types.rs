@@ -25,6 +25,8 @@ pub struct CoreReading {
     pub min_c: Option<f64>,
     /// Running maximum temp seen since start (real only).
     pub max_c: Option<f64>,
+    /// Running session average of the real samples seen since start.
+    pub avg_c: Option<f64>,
 }
 
 /// Core classification. Snapdragon X Prime/Performance cores map to `Performance`;
@@ -58,6 +60,13 @@ pub struct SensorSnapshot {
     pub chip_model: String,
     /// Total physical cores / logical threads, e.g. "10 / 10".
     pub core_thread: String,
+    /// Platform label, e.g. "ARM64 · Oryon". Built from the detected chip
+    /// profile's `uarch`; "ARM64" alone when the microarchitecture is unknown.
+    pub platform: String,
+    /// Process node from the chip profile, e.g. "4 nm" (spec label, not telemetry).
+    pub lithography: String,
+    /// Nominal TDP in watts from the chip profile (spec label). `None` when unknown.
+    pub tdp_w: Option<u32>,
     /// Thermal junction max in °C from the chip profile (e.g. 100). Used for
     /// the temp-color scale and overheat threshold defaults.
     pub tjmax_c: f64,
@@ -89,6 +98,9 @@ impl Default for SensorSnapshot {
             chip_name: "Detecting…".into(),
             chip_model: String::new(),
             core_thread: "— / —".into(),
+            platform: "ARM64".into(),
+            lithography: String::new(),
+            tdp_w: None,
             tjmax_c: 100.0,
             package_c: None,
             average_c: None,

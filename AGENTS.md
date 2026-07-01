@@ -7,7 +7,7 @@
 - Run Rust check (no codegen): `cargo check --manifest-path src-tauri/Cargo.toml`
 - Run linter: `cargo clippy --manifest-path src-tauri/Cargo.toml`
 ## Project overview
-ARMTEMP is a native temperature monitor for Snapdragon X / X2 processors (Qualcomm Oryon) on Windows on ARM (ARM64). Built with Tauri 2 (Rust backend) + React 18 (TypeScript frontend), it reads real on-die thermal sensors via ACPI thermal zones and displays per-core temperatures, loads, and power. The app recreates the Core Temp experience for the Snapdragon X family, with a live system-tray icon, mini-mode, overheat protection, and a 6-tab settings dialog. All telemetry is strictly real — no simulated or fallback values anywhere.
+ARMTEMP is a native temperature monitor for Snapdragon X / X2 processors (Qualcomm Oryon) on Windows on ARM (ARM64). Built with Tauri 2 (Rust backend) + React 18 (TypeScript frontend), it reads real on-die thermal sensors via ACPI thermal zones and displays per-core temperatures, loads, and power. The app recreates the Core Temp experience for the Snapdragon X family, with a live system-tray icon, mini-mode, and classic Win32-style dialogs: a 4-tab Settings dialog (General / Display / Notification Area / Windows Taskbar, native checkboxes, OK/Cancel/Apply), a separate Overheat protection dialog (Options menu), and an About dialog (Help menu). All telemetry is strictly real — no simulated or fallback values anywhere.
 ## Development workflow discipline
 - **CRITICAL**: NEVER commit or push changes without explicit user approval
 - **ALWAYS** ask for user confirmation before any git operations
@@ -43,7 +43,7 @@ The version lives in **four** places — keep them in sync on every bump:
 1. `package.json` → `"version"`
 2. `src-tauri/Cargo.toml` → `version = "..."`
 3. `src-tauri/tauri.conf.json` → `"version"`
-4. Display strings: `src/App.tsx` title-bar `version=` prop and the About tab in `src/components/SettingsDialog.tsx`
+4. Display string: the About dialog in `src/components/AboutDialog.tsx`
 
 After updating all four, in the feature branch BEFORE creating PR:
 ```bash
@@ -108,7 +108,7 @@ Version bumping happens IN the feature branch, BEFORE creating the PR:
 # Check current version
 grep '"version"' package.json
 # Check all version locations are in sync
-grep -rn "0\.1\.0" package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json src/App.tsx src/components/SettingsDialog.tsx
+grep -rn "0\.1\.0" package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json src/components/AboutDialog.tsx
 # Check if tags exist
 git tag -l | tail -5
 ```
@@ -121,29 +121,31 @@ Users can always override AI agent version decisions:
 - **Frontend**: React 18 with TypeScript, built with Vite, served in the Tauri WebView2
 - **Styling**: CSS custom properties drive theming (dark/light), tokens in `src/app/theme.ts`
 - **Backend**: Rust (Tauri 2), native ARM64 binary
-- **Sensors**: Real telemetry via PowerShell `Get-CimInstance` (ACPI thermal zones, per-core load, CPU identity)
+- **Sensors**: Real telemetry via the native Windows PDH API (ACPI thermal zones, per-core load, live CPU frequency); CPU identity via the registry + `GetSystemInfo`
 - **State Management**: React hooks (useState, useEffect, useCallback)
 - **Tray**: Tauri tray-icon plugin, live-updating temperature icon
 - **Settings Persistence**: Tauri store plugin (JSON in app data folder)
 ## Key directories
 - `src/app/` - TypeScript types, theme tokens, hooks (useSettings, useSensors)
-- `src/components/` - React components (TitleBar, ProcessorInfo, TempTable, SettingsDialog, MiniMode)
+- `src/components/` - React components (MenuBar, ProcessorInfo, TempTable, SettingsDialog, OverheatDialog, AboutDialog, MiniMode)
 - `src-tauri/src/` - Rust backend (lib.rs = app wiring, sensors/ = telemetry)
-- `src-tauri/src/sensors/` - Sensor providers (powershell.rs = primary, chips.rs = profiles, tray.rs = icon rendering, types.rs = data shapes)
+- `src-tauri/src/sensors/` - Sensor providers (pdh.rs = primary, chips.rs = profiles, tray.rs = icon rendering, types.rs = data shapes)
 - `tools/` - Phase 0 sensor probe scripts (PowerShell) + icon generator
 ## Real-data contract (CRITICAL)
 - **All telemetry must be REAL.** No simulated, random, or fallback values anywhere.
 - Where a real sensor source is missing (e.g. per-core voltage, true per-core temps), show `—` honestly. Never fabricate a number.
-- The working data source on Snapdragon X is `Win32_PerfFormattedData_Counters_ThermalZoneInformation` (ACPI thermal zones). See `SENSORS.md`.
+- The working data source on Snapdragon X is the `Thermal Zone Information` PDH counter object (ACPI thermal zones). See `SENSORS.md`.
 - Per-core temps are real *zone* readings mapped to cores (Core #0 = hottest zone), NOT true per-core sensors. Document this in the About tab / README; do not imply otherwise.
-- The Rust `wmi` crate's COM path fails with `WBEM_E_NOT_FOUND` under Tauri — use the PowerShell/`Get-CimInstance` backend (`sensors/powershell.rs`). Do NOT reintroduce the COM query path in the main process.
+- Package power is genuinely unavailable from userspace on this firmware (confirmed empty PDH/WMI power counter) — show `—`, do not wire up a fake value.
+- Read counters natively via PDH (`sensors/pdh.rs`). Do NOT reintroduce the `wmi` crate's COM/`IWbemServices` query path — it fails with `WBEM_E_NOT_FOUND` under Tauri (see `SENSORS.md` §7 for that history).
 ## Main window layout structure
-The application displays all sensor information in a single window with a classic Core Temp layout:
-1. **Title Bar** - App icon, name + version, window controls (minimize/close). Drag region for frameless window.
-2. **Menu Bar** - Tools, Options, Help (no unit toggle — unit lives in Settings).
-3. **Processor Information** - Dense 2-column field/value grid (Processor, Platform, Vendor ID, CPUID, Cores, Threads, Frequency, Tj. Max, Load, Power).
-4. **Temperature Readings** - Per-core table (Core # | Temp | Low | High | Load) with color-coded temp dots and load bars.
-5. **Status Bar** - Sunken footer with CPU Temp / Avg / Low / High.
+The application displays all sensor information in a single window matching Core Temp's actual layout:
+1. **Native title bar** — the OS draws it (icon, title, minimize/close); the window is decorated and opaque (no custom chrome, no transparency/blur). Dark/light native chrome follows the app theme via `getCurrentWindow().setTheme()`.
+2. **Menu Bar** (`src/components/MenuBar.tsx`) — File (Exit) / Options (Settings, Overheat protection, Toggle Mini Mode, Always on top) / Tools (Refresh sensors) / Help (About ARMTEMP). Rendered as themed HTML dropdowns (a native HMENU doesn't follow dark/light mode on Windows) styled to look like real Win32 menus. No unit toggle — Fahrenheit lives in Settings → Display. Launch flags `--settings` / `--overheat` / `--about` deep-link the dialogs.
+3. **Select CPU** row (combo + `[N] Core(s) [N] Thread(s)` sunken count boxes) + **Processor Information** group box (Win32 etched border, sunken read-only value fields): Model / Platform / Frequency / CPUID full rows; `Boost | Lithography` and `Throttle | TDP` pairs. VID and Revision are intentionally omitted (permanently unavailable on Snapdragon X); Throttle is the live ACPI passive-limit status (red "Yes" while the firmware throttles).
+4. **Temperature Readings** group box — Tj. Max row, per-core rows (Core # | Temp. | Min. | Max. | Load) with **colored temperature text** (no dots, no progress bars — the color itself carries the meaning), Power row.
+5. **Status Bar** — thin native strip with CPU Temp / Avg / Low / High.
+6. **Mini-mode** drops native decorations at runtime (`setDecorations(false)` + `setSize()`) for a compact always-on-top box, and restores them on exit — matches Core Temp's mini mode.
 ## Development workflow
 1. **ALWAYS** create a new branch for each issue: `git checkout -b issue-{number}-description`
 2. Work on features in the branch, commit changes with descriptive messages
@@ -171,9 +173,10 @@ The application displays all sensor information in a single window with a classi
 - Commits: conventional-commits style (`feat:`, `fix:`, `docs:`, `chore:`)
 - Match the surrounding code's naming and density — don't over-comment
 ## Sensor backend notes
-- **Primary backend**: `sensors/powershell.rs` — shells out to `Get-CimInstance`, parses JSON. This is the PROVEN path (Phase 0).
-- **Excluded backend**: `sensors/provider.rs` (COM/IWbemServices) — fails with WBEM_E_NOT_FOUND under Tauri. Retained as reference, excluded from build.
-- **PowerShell `$_` mangling**: running PowerShell via `bash -c "powershell -Command '...$_...'"` corrupts variables. Put probe scripts in `tools/*.ps1` and invoke with `-File`.
+- **Primary backend**: `sensors/pdh.rs` — native Windows PDH (`pdh.dll`) counters on a dedicated worker thread (PDH handles aren't safely shared across threads). No subprocess, no COM/WMI.
+- **`% Processor Time`/`Processor Frequency` are rate counters**: they need two `PdhCollectQueryData` calls before the value is valid; the query is primed once at open so the first real tick already has valid data.
+- **`Processor Information` instance names are `group,core`** (e.g. `0,3`) plus `group,_Total`/bare `_Total` roll-ups — parse the trailing index, skip totals. Differs from the flat `0`.. `9` index the old WMI-based path used.
+- **PowerShell `$_` mangling** (only relevant to the historical `tools/*.ps1` probe scripts, not the app itself): running PowerShell via `bash -c "powershell -Command '...$_...'"` corrupts variables. Invoke those scripts with `-File`.
 - Polling interval default: 1500ms (configurable in Settings → General)
 ## Testing
 - Manual testing required for sensor data (real hardware only — runs on Snapdragon X machines)
@@ -190,7 +193,7 @@ The application displays all sensor information in a single window with a classi
 - Release profile: optimized (`lto`, `strip`, `opt-level = "s"`).
 ## Common pitfalls
 - **EBUSY on `npm run tauri dev`:** Vite's file-watcher must not recurse into `src-tauri/target/` (locked `.dll` during cargo builds). It's excluded in `vite.config.ts` `server.watch.ignored` — don't remove that.
-- **PowerShell `$_` mangling:** running PowerShell via bash `-Command` corrupts `$_`/`$var`. Use `-File` with script files in `tools/`.
-- **COM/WMI under Tauri:** do not reintroduce the `wmi` crate's `IWbemServices` query path — it fails with `WBEM_E_NOT_FOUND`. The PowerShell backend is the working approach.
+- **PowerShell `$_` mangling:** running PowerShell via bash `-Command` corrupts `$_`/`$var`. Use `-File` with script files in `tools/`. (Only matters for the historical probe scripts — the app no longer shells out to PowerShell at all.)
+- **COM/WMI under Tauri:** do not reintroduce the `wmi` crate's `IWbemServices` query path — it fails with `WBEM_E_NOT_FOUND`. PDH (`sensors/pdh.rs`) is the working native approach and doesn't touch COM.
 - **Don't wire `claude-design-output/` to live data** — it's a simulated mockup. Port its visuals only.
 - **Version sync:** the version must match in all four locations (package.json, Cargo.toml, tauri.conf.json, display strings). See Version Bumping Protocol.

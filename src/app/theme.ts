@@ -7,36 +7,44 @@ interface TokenSet {
   [token: string]: string;
 }
 
-// The CSS-variable palette from the design's vars(), verbatim.
+// Win32 classic-dialog palette (Core Temp look) — flat surfaces, etched group
+// boxes, sunken value fields. Dark mode is our own addition (real Core Temp
+// has none); values chosen to read as a native dark dialog, not a website.
 const DARK: TokenSet = {
-  "--mica": "rgba(43,43,43,0.74)",
-  "--surface": "#272727",
-  "--surface-2": "#2f2f2f",
-  "--card": "#2d2d2d",
-  "--card-2": "#333333",
+  "--mica": "#202020", // kept for API compat; window is opaque now
+  "--surface": "#202020", // dialog background
+  "--surface-2": "#262626",
+  "--card": "#2b2b2b", // menus / dropdowns
+  "--card-2": "#262626",
+  "--sunken-bg": "#191919", // sunken value-field background
+  "--groove-hi": "#3f3f3f", // group-box etched highlight
+  "--groove-lo": "#0d0d0d", // group-box etched shadow
   "--text": "#ffffff",
-  "--text-2": "rgba(255,255,255,0.78)",
-  "--text-3": "rgba(255,255,255,0.5)",
-  "--border": "rgba(255,255,255,0.07)",
-  "--border-2": "rgba(255,255,255,0.13)",
-  "--hover": "rgba(255,255,255,0.06)",
-  "--track": "rgba(255,255,255,0.1)",
-  "--shadow": "0 20px 60px rgba(0,0,0,0.6)",
+  "--text-2": "rgba(255,255,255,0.82)",
+  "--text-3": "rgba(255,255,255,0.55)",
+  "--border": "#3a3a3a",
+  "--border-2": "#454545",
+  "--hover": "rgba(255,255,255,0.08)",
+  "--track": "rgba(255,255,255,0.22)",
+  "--shadow": "none",
 };
 const LIGHT: TokenSet = {
-  "--mica": "rgba(249,249,249,0.78)",
-  "--surface": "#f3f3f3",
-  "--surface-2": "#eaeaea",
+  "--mica": "#f0f0f0",
+  "--surface": "#f0f0f0", // classic Windows dialog gray
+  "--surface-2": "#e8e8e8",
   "--card": "#ffffff",
-  "--card-2": "#f7f7f7",
-  "--text": "#1b1b1b",
-  "--text-2": "rgba(0,0,0,0.68)",
-  "--text-3": "rgba(0,0,0,0.45)",
-  "--border": "rgba(0,0,0,0.07)",
-  "--border-2": "rgba(0,0,0,0.13)",
-  "--hover": "rgba(0,0,0,0.045)",
-  "--track": "rgba(0,0,0,0.1)",
-  "--shadow": "0 20px 60px rgba(0,0,0,0.25)",
+  "--card-2": "#f5f5f5",
+  "--sunken-bg": "#ffffff",
+  "--groove-hi": "#ffffff",
+  "--groove-lo": "#a0a0a0",
+  "--text": "#1a1a1a",
+  "--text-2": "rgba(0,0,0,0.75)",
+  "--text-3": "rgba(0,0,0,0.5)",
+  "--border": "#d4d4d4",
+  "--border-2": "#adadad",
+  "--hover": "rgba(0,0,0,0.06)",
+  "--track": "rgba(0,0,0,0.3)",
+  "--shadow": "none",
 };
 
 export const ACCENT = "#0078D4"; // Windows accent blue (design default).

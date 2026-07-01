@@ -48,20 +48,20 @@ pub fn decide(snapshot: &SensorSnapshot, mode: TrayMode) -> TrayDecision {
         TrayMode::Package | TrayMode::Highest => {
             // Highest valid zone == package proxy.
             let t = snapshot.package_c;
-            (t, t.map(|v| temp_color(v, snapshot.tjmax_c)).unwrap_or((140, 140, 140)))
+            (t, t.map(|v| temp_color(v, snapshot.tjmax_c)).unwrap_or(NO_READING_GRAY))
         }
         TrayMode::Average => (
             snapshot.average_c,
             snapshot
                 .average_c
                 .map(|v| temp_color(v, snapshot.tjmax_c))
-                .unwrap_or((140, 140, 140)),
+                .unwrap_or(NO_READING_GRAY),
         ),
         TrayMode::All => {
             // For a single icon, "All" still draws the hottest; the per-core
             // detail is in the flyout/UI. Color by hottest.
             let t = snapshot.package_c;
-            (t, t.map(|v| temp_color(v, snapshot.tjmax_c)).unwrap_or((140, 140, 140)))
+            (t, t.map(|v| temp_color(v, snapshot.tjmax_c)).unwrap_or(NO_READING_GRAY))
         }
     };
     TrayDecision {
@@ -70,13 +70,187 @@ pub fn decide(snapshot: &SensorSnapshot, mode: TrayMode) -> TrayDecision {
     }
 }
 
-/// Build a simple solid-color PNG icon with no drawn number (fallback).
-pub fn blank_icon_png(color: (u8, u8, u8)) -> Vec<u8> {
-    // 32x32 RGBA solid color PNG, hand-encoded (no extra deps).
+/// 3x5 bitmap digit font. Index 0-9 = digits, index 10 = dash (drawn when
+/// there is no real reading — never a fabricated number). Each row byte uses
+/// bits 2,1,0 for columns 0,1,2 (1 = filled pixel).
+const GLYPHS_3X5: [[u8; 5]; 11] = [
+    [7, 5, 5, 5, 7], // 0
+    [2, 6, 2, 2, 7], // 1
+    [7, 1, 7, 4, 7], // 2
+    [7, 1, 7, 1, 7], // 3
+    [5, 5, 7, 1, 1], // 4
+    [7, 4, 7, 1, 7], // 5
+    [7, 4, 7, 5, 7], // 6
+    [7, 1, 1, 1, 1], // 7
+    [7, 5, 7, 5, 7], // 8
+    [7, 5, 7, 1, 7], // 9
+    [0, 0, 7, 0, 0], // dash (no reading)
+];
+
+fn glyph_for(ch: u8) -> &'static [u8; 5] {
+    if ch.is_ascii_digit() {
+        &GLYPHS_3X5[(ch - b'0') as usize]
+    } else {
+        &GLYPHS_3X5[10]
+    }
+}
+
+/// Neutral gray used when there is no real reading (matches `decide()`'s
+/// "unavailable" color).
+const NO_READING_GRAY: (u8, u8, u8) = (140, 140, 140);
+
+/// Render the real temperature into a tray icon — Core Temp's signature
+/// feature. `value` is already unit-converted and rounded by the caller;
+/// `None` draws an honest dash, never a fabricated number. Transparent
+/// background so the OS tray/taskbar shows through; `style` adds an optional
+/// background plate for contrast. Rendered oversized (`size`, e.g. 48) so
+/// Windows' high-DPI tray scaling stays legible.
+pub fn number_icon_png(value: Option<i32>, color: (u8, u8, u8), style: TrayStyle, size: u32) -> Vec<u8> {
+    let text: alloc_free_string::TinyString = match value {
+        Some(v) => alloc_free_string::from_i32(v),
+        None => alloc_free_string::dash(),
+    };
+    let glyphs: Vec<&'static [u8; 5]> = text.as_bytes().iter().map(|&b| glyph_for(b)).collect();
+    let n = glyphs.len().max(1) as u32;
+
+    // Glyphs are 3 wide + 1px gap between them; pick the largest integer scale
+    // that fits both dimensions with a margin, so 2-digit °C and 3-digit °F
+    // both render legibly.
+    let unit_w = 3 * n + (n - 1);
+    let unit_h = 5u32;
+    let margin = 0.82; // leave a small border so the plate doesn't clip
+    let scale = ((size as f64 * margin / unit_w as f64).min(size as f64 * margin / unit_h as f64))
+        .floor()
+        .max(1.0) as u32;
+
+    let block_w = unit_w * scale;
+    let block_h = unit_h * scale;
+    let ox = (size.saturating_sub(block_w)) / 2;
+    let oy = (size.saturating_sub(block_h)) / 2;
+
     let (r, g, b) = color;
-    let w = 32u32;
-    let h = 32u32;
-    rgba_to_png(w, h, &move |_x, _y| [r, g, b, 230])
+    let digit_color = match style {
+        // Rounded/Badge draw a dark or colored plate, so use a light digit
+        // for contrast; Plain draws straight on the transparent background.
+        TrayStyle::Rounded => (255u8, 255u8, 255u8),
+        TrayStyle::Badge => (255u8, 255u8, 255u8),
+        TrayStyle::Plain => (r, g, b),
+    };
+
+    rgba_to_png(size, size, &move |x, y| {
+        // Background plate.
+        let plate = match style {
+            TrayStyle::Plain => None,
+            TrayStyle::Rounded => plate_pixel(x, y, size, (r / 3, g / 3, b / 3), 190, 6),
+            TrayStyle::Badge => plate_pixel(x, y, size, (r, g, b), 235, size / 2),
+        };
+
+        // Foreground glyph pixel, if inside the glyph block.
+        if x >= ox && y >= oy {
+            let gx = (x - ox) / scale;
+            let gy = (y - oy) / scale;
+            if gy < unit_h && gx < unit_w {
+                let col_in_glyph = gx % 4; // 3 pixels + 1 gap column
+                let glyph_idx = (gx / 4) as usize;
+                if col_in_glyph < 3 && glyph_idx < glyphs.len() {
+                    let row = glyphs[glyph_idx][gy as usize];
+                    let bit = 1u8 << (2 - col_in_glyph);
+                    if row & bit != 0 {
+                        let (dr, dg, db) = digit_color;
+                        return [dr, dg, db, 255];
+                    }
+                }
+            }
+        }
+
+        plate.unwrap_or([0, 0, 0, 0])
+    })
+}
+
+/// Background-plate pixel for the Rounded/Badge tray styles: a filled square
+/// (Rounded, small corner radius) or circle (Badge, radius = size/2), solid
+/// `color` at `alpha`. Returns `None` outside the plate (transparent).
+fn plate_pixel(x: u32, y: u32, size: u32, color: (u8, u8, u8), alpha: u8, radius: u32) -> Option<[u8; 4]> {
+    let (r, g, b) = color;
+    let inside = if radius * 2 >= size {
+        // Circle (Badge): distance from center.
+        let c = size as f64 / 2.0;
+        let dx = x as f64 + 0.5 - c;
+        let dy = y as f64 + 0.5 - c;
+        dx * dx + dy * dy <= (radius as f64) * (radius as f64)
+    } else {
+        // Rounded square (Rounded): only the 4 corner boxes get cut by a
+        // quarter-circle inset `radius` px from each true corner; the rest
+        // of the square (edges + center) is always filled.
+        let rad = radius as i64;
+        let s = size as i64;
+        let px = x as i64;
+        let py = y as i64;
+        let near_left = px < rad;
+        let near_right = px >= s - rad;
+        let near_top = py < rad;
+        let near_bottom = py >= s - rad;
+        if (near_left || near_right) && (near_top || near_bottom) {
+            let ccx = if near_left { rad } else { s - 1 - rad };
+            let ccy = if near_top { rad } else { s - 1 - rad };
+            let dx = px - ccx;
+            let dy = py - ccy;
+            dx * dx + dy * dy <= rad * rad
+        } else {
+            true
+        }
+    };
+    if inside {
+        Some([r, g, b, alpha])
+    } else {
+        None
+    }
+}
+
+/// Tiny stack-allocated ASCII string (max 4 bytes: signed 3-digit temps + a
+/// dash never exceed this) so the digit renderer avoids a heap `String`.
+mod alloc_free_string {
+    pub struct TinyString {
+        buf: [u8; 4],
+        len: u8,
+    }
+    impl TinyString {
+        pub fn as_bytes(&self) -> &[u8] {
+            &self.buf[..self.len as usize]
+        }
+    }
+    pub fn dash() -> TinyString {
+        TinyString { buf: [b'-', 0, 0, 0], len: 1 }
+    }
+    pub fn from_i32(v: i32) -> TinyString {
+        let mut buf = [0u8; 4];
+        let mut len = 0usize;
+        let neg = v < 0;
+        let mut n = v.unsigned_abs();
+        let mut digits = [0u8; 4];
+        let mut dlen = 0usize;
+        if n == 0 {
+            digits[0] = b'0';
+            dlen = 1;
+        } else {
+            while n > 0 && dlen < digits.len() {
+                digits[dlen] = b'0' + (n % 10) as u8;
+                n /= 10;
+                dlen += 1;
+            }
+        }
+        if neg && len < buf.len() {
+            buf[len] = b'-';
+            len += 1;
+        }
+        for i in (0..dlen).rev() {
+            if len < buf.len() {
+                buf[len] = digits[i];
+                len += 1;
+            }
+        }
+        TinyString { buf, len: len as u8 }
+    }
 }
 
 /// Minimal PNG encoder (RGBA8, single IDAT, zlib via store). Good enough for a

@@ -6,22 +6,35 @@ interface Props {
   tjmax: number;
   unit: "C" | "F";
   colorCode: boolean;
+  powerW: number | null;
 }
 
-// The CoreTemp-style per-core temperature table:
-//   Core # | Temp ● | Low | High | Load
-// Per-core temps are REAL (zone-mapped: Core #0 = hottest zone).
-export function TempTable({ cores, tjmax, unit, colorCode }: Props) {
+// The Core Temp "Temperature Readings" group box: Tj. Max row, per-core rows
+// with colored temperature TEXT (no dots/bars — the color itself carries the
+// meaning), and a Power row. Per-core temps are REAL (zone-mapped: Core #0 =
+// hottest zone).
+export function TempTable({ cores, tjmax, unit, colorCode, powerW }: Props) {
+  const powerStr = powerW != null ? `${Math.round(powerW)} W` : "—";
   return (
-    <div className="temp-section">
-      <div className="section-label">Temperature Readings</div>
-      <div className="card temp-table">
-        <div className="temp-head">
-          <div>Core</div>
-          <div className="ta">Temp.</div>
-          <div className="ta">Low</div>
-          <div className="ta">High</div>
-          <div className="load-col">Load</div>
+    <div className="groupbox temp-groupbox">
+      <span className="groupbox-legend">Processor #0: Temperature Readings</span>
+      <div className="temp-table">
+        <div className="temp-row">
+          <div className="core-cell">Power:</div>
+          <div className="tcell sunken mono">{powerStr}</div>
+          <div />
+          <div />
+          <div />
+          <div />
+        </div>
+        {/* Tj. Max row doubles as the column-header row, like real Core Temp. */}
+        <div className="temp-row">
+          <div className="core-cell">Tj. Max:</div>
+          <div className="tcell sunken mono">{tjmax}°C</div>
+          <div className="thead">Min.</div>
+          <div className="thead">Max.</div>
+          <div className="thead">Avg.</div>
+          <div className="thead">Load</div>
         </div>
         {cores.length === 0 && (
           <div className="temp-empty">No sensor data — reading from on-die thermal sensors…</div>
@@ -30,14 +43,17 @@ export function TempTable({ cores, tjmax, unit, colorCode }: Props) {
           <CoreRow key={c.index} c={c} tjmax={tjmax} unit={unit} colorCode={colorCode} />
         ))}
       </div>
-      {colorCode && (
-        <div className="temp-legend">
-          <span className="legend-item"><span className="dot" style={{ background: "#2fa45a" }} /> ≤45%</span>
-          <span className="legend-item"><span className="dot" style={{ background: "#d8a51a" }} /> ≤64%</span>
-          <span className="legend-item"><span className="dot" style={{ background: "#e07a2b" }} /> ≤82%</span>
-          <span className="legend-item"><span className="dot" style={{ background: "#e0473a" }} /> &gt;82%</span>
-        </div>
-      )}
+    </div>
+  );
+}
+
+/// One value cell: its own sunken box, text colored by ITS OWN value (real
+/// Core Temp colors every temperature cell independently).
+function TempCell({ v, tjmax, unit, colorCode }: { v: number | null; tjmax: number; unit: "C" | "F"; colorCode: boolean }) {
+  const color = v !== null && colorCode ? tempColor(v, tjmax) : undefined;
+  return (
+    <div className="tcell sunken mono" style={color ? { color } : undefined}>
+      {formatTemp(v, unit)}
     </div>
   );
 }
@@ -53,28 +69,18 @@ function CoreRow({
   unit: "C" | "F";
   colorCode: boolean;
 }) {
-  const hasTemp = c.temp_c !== null;
-  const color = hasTemp && colorCode ? tempColor(c.temp_c!, tjmax) : "var(--text)";
-  const loadPct = c.load !== null ? Math.round(c.load) : 0;
   const loadStr = c.load !== null ? `${Math.round(c.load)} %` : "—";
   return (
     <div className="temp-row">
       <div className="core-cell">
-        <span className={`dot ${hasTemp ? "" : "empty"}`} style={{ background: hasTemp ? color : "var(--text-3)" }} />
-        <span>Core #{c.index}</span>
+        <span>Core #{c.index}:</span>
         <span className="kind-tag">{c.kind === "efficiency" ? "E" : "P"}</span>
       </div>
-      <div className="ta mono temp-val" style={{ color: hasTemp ? color : "var(--text-3)" }}>
-        {formatTemp(c.temp_c, unit)}
-      </div>
-      <div className="ta mono dim">{formatTemp(c.min_c, unit)}</div>
-      <div className="ta mono dim">{formatTemp(c.max_c, unit)}</div>
-      <div className="load-col">
-        <div className="load-bar">
-          <div className="load-fill" style={{ width: `${loadPct}%`, background: hasTemp && colorCode ? color : "var(--accent)" }} />
-        </div>
-        <span className="mono load-str">{loadStr}</span>
-      </div>
+      <TempCell v={c.temp_c} tjmax={tjmax} unit={unit} colorCode={colorCode} />
+      <TempCell v={c.min_c} tjmax={tjmax} unit={unit} colorCode={colorCode} />
+      <TempCell v={c.max_c} tjmax={tjmax} unit={unit} colorCode={colorCode} />
+      <TempCell v={c.avg_c} tjmax={tjmax} unit={unit} colorCode={colorCode} />
+      <div className="tcell sunken mono">{loadStr}</div>
     </div>
   );
 }

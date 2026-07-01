@@ -1,6 +1,6 @@
 [package]
 name = "armtemp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Native Snapdragon X / X2 temperature monitor for Windows on ARM"
 authors = ["Spencer Francisco"]
 edition = "2021"
@@ -24,13 +24,15 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 
-# WMI access for the sensor backends (ACPI thermal zones, processor load, power).
-wmi = "0.14"
-# COM initialization helper for WMI on Windows.
+# Native Win32 access for the PDH sensor backend (ACPI thermal zones, processor
+# load/frequency via pdh.dll) and CPU identity (registry + GetSystemInfo).
+# No COM/WMI — see sensors/pdh.rs and SENSORS.md §7 for why that path is avoided.
 windows = { version = "0.58", features = [
   "Win32_Foundation",
-  "Win32_System_Com",
-  "Win32_System_WindowsProgramming",
+  "Win32_System_Performance",
+  "Win32_System_Registry",
+  "Win32_System_SystemInformation",
+  "Win32_System_Power",
 ] }
 
 # Polling scheduler.

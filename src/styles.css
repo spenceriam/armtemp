@@ -5,19 +5,12 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--track) transparent;
 }
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(140, 140, 140, 0.45);
-  border-radius: 6px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
+:focus-visible {
+  outline: 1px dotted var(--text-2);
+  outline-offset: -1px;
 }
 
 html,
@@ -27,6 +20,7 @@ body,
   width: 100%;
   background: transparent;
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 12px;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
@@ -49,85 +43,91 @@ body,
 }
 
 /* ---------- window shell ---------- */
+/* Fixed design width + natural (content) height: the OS window is auto-sized
+   to this element's rendered rect (see the auto-fit effect in App.tsx), which
+   kills dead space below the status bar and makes zoom resize the window. */
 .window-shell {
-  flex: 1;
+  width: 430px;
+  /* `.app-root` is a flex column pinned to 100vh; without flex:none the
+     browser would compress the shell back down to fit 100vh as soon as real
+     content (e.g. all 10 core rows) needs more height than the window
+     currently has — freezing the auto-fit measurement below the true
+     content size. flex:none lets the shell be its natural size regardless
+     of the parent's height, so the ResizeObserver in App.tsx always sees
+     the real content height and can grow the OS window to match. */
+  flex: none;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border-2);
-  border-radius: 9px;
   overflow: hidden;
-  backdrop-filter: blur(40px) saturate(1.5);
-  box-shadow: var(--shadow);
 }
 
-/* ---------- titlebar ---------- */
-.titlebar {
-  flex: none;
-  display: flex;
-  align-items: center;
-}
-.titlebar-drag {
-  flex: 1;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding-left: 11px;
-}
-.titlebar-logo {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  background: linear-gradient(150deg, var(--accent), var(--accent-2));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.titlebar-title {
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-}
-.titlebar-version {
-  color: var(--text-3);
-  font-weight: 400;
-}
-.titlebar-spacer {
-  flex: 1;
-}
-
-/* ---------- menu bar ---------- */
+/* ---------- menu bar (File / Options / Tools / Help) ---------- */
 .menubar {
-  height: 30px;
   flex: none;
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 0 8px;
-  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-2);
+  font-size: 12px;
+  -webkit-user-select: none;
+  user-select: none;
 }
-.menu-item {
+.menu-wrap {
+  position: relative;
+}
+.menu-top {
   background: transparent;
   border: none;
-  color: var(--text-2);
-  font-size: 12px;
+  color: var(--text);
+  font: inherit;
   padding: 4px 9px;
-  border-radius: 4px;
   cursor: pointer;
-  font-family: inherit;
 }
-.menu-item:hover {
+.menu-top:hover,
+.menu-top.open {
   background: var(--hover);
 }
-.menubar-spacer {
-  flex: 1;
+.menu-drop {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  min-width: 180px;
+  background: var(--card);
+  border: 1px solid var(--border-2);
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.25);
+  padding: 2px;
+}
+.menu-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 12px 5px 24px;
+  position: relative;
+  background: none;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.menu-entry:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.menu-check::before {
+  content: "✓";
+  position: absolute;
+  left: 7px;
+}
+.menu-sep {
+  height: 1px;
+  margin: 3px 1px;
+  background: var(--border-2);
 }
 
-/* ---------- window controls ---------- */
-.window-controls {
-  display: flex;
-  height: 36px;
-}
+/* ---------- window controls (still used by the Settings modal's close button) ---------- */
 .win-btn {
   width: 46px;
   height: 36px;
@@ -147,11 +147,6 @@ body,
   background: #c42b1c;
   color: #fff;
 }
-.ico-min {
-  width: 11px;
-  height: 1px;
-  background: currentColor;
-}
 
 /* ---------- body ---------- */
 .window-body {
@@ -163,166 +158,163 @@ body,
 .card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 7px;
 }
 
-/* ---------- section labels (CoreTemp-style headings) ---------- */
-.section-label {
-  font-size: 10.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-3);
-  margin: 14px 0 6px 1px;
+/* ---------- Win32 group box + sunken read-only field ---------- */
+.groupbox {
+  position: relative;
+  margin: 10px 8px 4px;
+  padding: 12px 8px 8px;
+  border: 1px solid var(--groove-lo);
+  box-shadow: inset 0 0 0 1px var(--groove-hi);
+}
+.groupbox-legend {
+  position: absolute;
+  top: -8px;
+  left: 8px;
+  padding: 0 4px;
+  background: var(--surface);
+  font-size: 11px;
+  color: var(--text-2);
+}
+.sunken {
+  background: var(--sunken-bg);
+  border: 1px solid var(--border-2);
+  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.18);
+  padding: 1px 6px;
+  font-variant-numeric: tabular-nums;
+  min-height: 18px;
 }
 
-/* ---------- processor info (dense field/value grid) ---------- */
+/* ---------- processor info (Select CPU + dense field/value grid) ---------- */
 .proc-section {
   margin-top: 2px;
 }
-.proc-card {
-  padding: 10px 13px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 18px;
-}
-.proc-field {
+.select-cpu {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  font-size: 11.5px;
-  gap: 8px;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px;
+  font-size: 11px;
 }
-.proc-field.full {
-  grid-column: 1 / -1;
+.select-cpu label {
+  color: var(--text-2);
+}
+.select-cpu select {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 11px;
+  background: var(--sunken-bg);
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  padding: 2px 4px;
+}
+.cpu-count {
+  min-width: 24px;
+  text-align: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.cpu-count-label {
+  font-size: 10.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.proc-grid {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  gap: 4px 8px;
+  align-items: center;
 }
 .proc-field-label {
-  color: var(--text-3);
-  flex: none;
+  text-align: right;
+  color: var(--text-2);
+  font-size: 11px;
+  white-space: nowrap;
 }
 .proc-field-value {
   font-family: "Cascadia Code", ui-monospace, monospace;
-  text-align: right;
+  font-size: 11.5px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.proc-field-value.full {
+  grid-column: 2 / -1;
+}
 
-/* ---------- temperature table ---------- */
-.temp-section {
-  margin-top: 2px;
+/* ---------- temperature readings (Core Temp style: colored text, no bars) ---------- */
+.temp-groupbox {
+  margin-top: 12px;
 }
 .temp-table {
   overflow: hidden;
 }
-.temp-head {
-  display: grid;
-  grid-template-columns: 1.5fr 0.9fr 0.9fr 0.9fr 1.6fr;
-  padding: 6px 12px;
-  background: var(--card-2);
+.thead {
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   color: var(--text-3);
-}
-.temp-head .load-col {
-  text-align: right;
+  text-align: center;
+  align-self: end;
 }
 .temp-empty {
-  padding: 16px 12px;
-  font-size: 11.5px;
+  padding: 10px 4px;
+  font-size: 11px;
   color: var(--text-3);
   text-align: center;
 }
 .temp-row {
   display: grid;
-  grid-template-columns: 1.5fr 0.9fr 0.9fr 0.9fr 1.6fr;
+  /* label column + 5 individual sunken value cells (current/Min/Max/Avg/Load) */
+  grid-template-columns: 76px repeat(5, 1fr);
+  gap: 3px 4px;
   align-items: center;
-  padding: 4px 12px;
-  font-size: 12px;
-  border-top: 1px solid var(--border);
+  padding: 1px 2px;
+  font-size: 11px;
+  min-height: 21px;
 }
-.temp-row:hover {
-  background: var(--hover);
+.tcell {
+  text-align: center;
+  padding: 1px 2px;
+  font-size: 11px;
+  min-height: 17px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .ta {
   text-align: right;
 }
 .mono {
   font-family: "Cascadia Code", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
 }
 .dim {
   color: var(--text-3);
 }
-.temp-val {
-  font-weight: 600;
-}
 .core-cell {
   display: flex;
   align-items: center;
-  gap: 7px;
-}
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex: none;
-}
-.dot.empty {
-  opacity: 0.4;
+  gap: 6px;
 }
 .kind-tag {
   font-size: 9px;
   color: var(--text-3);
   border: 1px solid var(--border-2);
-  border-radius: 3px;
   padding: 0 3px;
 }
-.load-col {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: flex-end;
-}
-.load-bar {
-  width: 70px;
-  height: 5px;
-  border-radius: 3px;
-  background: var(--track);
-  overflow: hidden;
-}
-.load-fill {
-  height: 100%;
-  border-radius: 3px;
-}
-.load-str {
-  color: var(--text-2);
-  width: 34px;
-  text-align: right;
-}
-.temp-legend {
-  display: flex;
-  gap: 14px;
-  margin-top: 6px;
-  font-size: 10px;
-  color: var(--text-3);
-}
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
 
-/* ---------- status bar (sunken footer) ---------- */
+/* ---------- status bar (thin native strip) ---------- */
 .status-bar {
   flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 14px;
-  background: var(--card-2);
-  border-top: 1px solid var(--border);
-  font-size: 11.5px;
+  padding: 4px 10px;
+  background: var(--surface);
+  border-top: 1px solid var(--border-2);
+  font-size: 11px;
   font-family: "Cascadia Code", ui-monospace, monospace;
 }
 .sb-item {
@@ -376,6 +368,15 @@ body,
   font-weight: 600;
   line-height: 1.3;
 }
+.load-bar {
+  width: 100%;
+  height: 5px;
+  background: var(--track);
+  overflow: hidden;
+}
+.load-fill {
+  height: 100%;
+}
 .core-card-foot {
   display: flex;
   justify-content: space-between;
@@ -420,65 +421,6 @@ body,
   display: block;
 }
 
-/* ---------- summary footer ---------- */
-.summary-footer {
-  margin-top: 12px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 10px 13px;
-  background: var(--card-2);
-}
-.summary-item {
-  display: flex;
-  flex-direction: column;
-}
-.summary-label {
-  font-size: 9.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-3);
-}
-.summary-val {
-  font-size: 18px;
-  font-weight: 600;
-}
-.summary-sep {
-  width: 1px;
-  height: 26px;
-  background: var(--border-2);
-}
-.summary-spacer {
-  flex: 1;
-}
-.btn-ghost {
-  font-size: 11.5px;
-  padding: 5px 11px;
-  border-radius: 5px;
-  border: 1px solid var(--border-2);
-  background: var(--card);
-  color: var(--text-2);
-  cursor: pointer;
-  font-family: inherit;
-}
-.btn-ghost:hover {
-  background: var(--hover);
-}
-.btn-accent {
-  font-size: 11.5px;
-  padding: 5px 11px;
-  border-radius: 5px;
-  border: none;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-}
-.btn-accent:hover {
-  filter: brightness(1.08);
-}
-
 /* ---------- mini mode ---------- */
 .mini-wrap {
   align-items: stretch;
@@ -490,9 +432,7 @@ body,
   flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border-2);
-  border-radius: 8px;
   overflow: hidden;
-  backdrop-filter: blur(40px) saturate(1.5);
 }
 .mini-head {
   display: flex;
@@ -567,226 +507,174 @@ body,
   justify-content: center;
 }
 .modal {
-  width: 692px;
+  width: 96vw;
   max-width: 96vw;
-  height: 482px;
-  max-height: 90vh;
+  max-height: 92vh;
   display: flex;
   flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border-2);
-  border-radius: 9px;
-  box-shadow: var(--shadow);
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
   overflow: hidden;
-  backdrop-filter: blur(40px) saturate(1.5);
 }
 .modal-titlebar {
-  height: 36px;
+  height: 32px;
   flex: none;
   display: flex;
   align-items: center;
-  padding-left: 13px;
+  padding-left: 11px;
+  border-bottom: 1px solid var(--border);
 }
 .modal-title {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
 }
 .modal-spacer {
   flex: 1;
 }
-.modal-body {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-.settings-nav {
-  width: 188px;
-  flex: none;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  border-right: 1px solid var(--border);
-}
-.nav-item {
-  font-size: 12.5px;
-  padding: 8px 11px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text-2);
-  background: transparent;
-  border: none;
-  text-align: left;
-  font-family: inherit;
-}
-.nav-item:hover {
-  background: var(--hover);
-}
-.nav-item.active {
-  background: var(--hover);
-  font-weight: 600;
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-.settings-content {
-  flex: 1;
-  padding: 16px 20px;
-  overflow-y: auto;
-}
-.settings-content h3 {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 14px;
-}
-.settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-.row-title {
-  font-size: 12.5px;
-  font-weight: 500;
-}
-.row-sub {
-  font-size: 11px;
-  color: var(--text-3);
-  margin-top: 2px;
-}
-.subhead {
-  font-size: 11px;
-  color: var(--text-3);
-  margin: 14px 0 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
 
-/* switch */
-.switch {
-  width: 40px;
-  height: 21px;
-  border-radius: 11px;
-  background: transparent;
-  border: 1px solid var(--text-3);
-  position: relative;
-  cursor: pointer;
-  flex: none;
-  transition: background 0.15s, border-color 0.15s;
-}
-.switch.on {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.switch-knob {
-  position: absolute;
-  top: 50%;
-  margin-top: -6px;
-  left: 4px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--text-2);
-  transform: translateX(0);
-  transition: transform 0.15s, background 0.15s;
-}
-.switch.on .switch-knob {
-  transform: translateX(18px);
-  background: #fff;
-}
-
-/* segmented control */
-.seg {
+/* ---------- classic Win32 tab strip ---------- */
+.tabstrip {
   display: flex;
-  gap: 2px;
-  padding: 3px;
-  background: var(--track);
-  border-radius: 7px;
+  align-items: flex-end;
+  padding: 8px 8px 0;
+  gap: 1px;
 }
-.seg-btn {
+.tab {
+  font: inherit;
   font-size: 11.5px;
-  padding: 4px 13px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-weight: 400;
   color: var(--text-2);
-  background: transparent;
-  border: none;
-  font-family: inherit;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-bottom: none;
+  padding: 4px 10px;
+  cursor: pointer;
+  position: relative;
+  top: 1px;
 }
-.seg-btn.active {
-  font-weight: 600;
+.tab.active {
+  background: var(--surface);
   color: var(--text);
-  background: var(--card);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  padding-top: 6px;
+  z-index: 1;
+}
+.tab-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-2);
+  padding: 12px 10px 6px;
 }
 
-/* radio row */
-.radio {
+/* ---------- native dialog controls ---------- */
+.dlg-group {
+  margin: 4px 2px 14px;
+}
+.chk-row {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 9px 11px;
-  border-radius: 7px;
+  gap: 7px;
+  padding: 3px 2px;
+  font-size: 11.5px;
   cursor: pointer;
-  margin-bottom: 5px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  width: 100%;
-  text-align: left;
-  font-family: inherit;
+  -webkit-user-select: none;
+  user-select: none;
 }
-.radio.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.radio:disabled {
-  cursor: default;
-  opacity: 0.85;
-}
-.radio-dot {
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
+.chk-row input[type="checkbox"],
+.chk-row input[type="radio"] {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--accent);
   flex: none;
-  border: 2px solid var(--text-3);
-  background: transparent;
 }
-.radio-dot.active {
-  border-color: var(--accent);
-  background: radial-gradient(circle, var(--accent) 0 4px, transparent 5px);
+.chk-row input:disabled + span {
+  color: var(--text-3);
 }
-.radio-label {
-  font-size: 12.5px;
+.chk-dim span {
+  color: var(--text-2);
 }
-.radio-sub {
+/* Read-only informational rows (e.g. the detected-chip list): render the
+   native control normally (disabled radios hide their check dot in dark
+   mode) but block all interaction. */
+.chk-static {
+  pointer-events: none;
+  cursor: default;
+}
+.chk-sub {
+  color: var(--text-3);
+  font-size: 10.5px;
+}
+.select-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 2px;
+  font-size: 11.5px;
+}
+.select-row select {
+  font: inherit;
+  font-size: 11px;
+  background: var(--sunken-bg);
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  padding: 2px 4px;
+  min-width: 110px;
+}
+.num-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.num-input {
+  width: 64px;
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  background: var(--sunken-bg);
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  padding: 2px 4px;
+  text-align: right;
+}
+.num-input:disabled {
+  color: var(--text-3);
+}
+.num-unit {
+  font-size: 11px;
+  color: var(--text-2);
+}
+.dlg-hint {
   font-size: 10.5px;
   color: var(--text-3);
+  padding: 2px 2px 0;
 }
 
-/* slider */
-.slider-block {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-.slider-head {
+/* ---------- dialog button row (OK / Cancel / Apply) ---------- */
+.dlg-buttons {
+  flex: none;
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
 }
-.slider-val {
-  font-family: "Cascadia Code", ui-monospace, monospace;
-  font-weight: 600;
-  color: var(--accent);
+.btn {
+  font: inherit;
+  font-size: 11.5px;
+  min-width: 72px;
+  padding: 3px 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  cursor: pointer;
 }
-.slider {
-  width: 100%;
-  accent-color: var(--accent);
+.btn:hover {
+  background: var(--hover);
 }
-.slider-hint {
-  font-size: 10.5px;
-  color: var(--text-3);
-  margin-top: 4px;
+.btn:active {
+  background: var(--track);
 }
 
 /* about */

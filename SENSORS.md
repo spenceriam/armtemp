@@ -79,15 +79,20 @@ Frequency per-core is **not** populated in this perf class on ARM64; only packag
 
 ---
 
-## 3. Power — real sensor present
+## 3. Power — hardware present, but NOT readable from userspace
 
 Devices/drivers:
 - PnP: **"Power Meter MAX34417"** (`ACPI\MAX34417\3`)
 - Driver service: **`SurfacePowerMeterDriver`** (`SurfacePowerMeterDriver.sys`)
 - Also `SurfacePowerTrackerCore.sys`.
 
-Surface via the `Power Meter` perf counter set
-(`Win32_PerfFormattedData_PowerMeter_*`) — to confirm field names in Phase 2 wiring.
+**Correction (post-Phase 0):** the hardware and driver exist, but the corresponding
+`Power Meter` perf-counter set (`Win32_PerfFormattedData_PowerMeter_*` / the native PDH
+`Power Meter` object) returns **no instances** on this firmware — confirmed empty via
+both `Get-CimInstance` and a native PDH query. Package power is therefore genuinely
+unavailable from any userspace surface found so far; ARMTEMP shows `power_w: None` → "—"
+honestly rather than wiring up a value that doesn't exist. Reading it would require the
+same driver-IOCTL route as per-core temperature (§5).
 
 ---
 
@@ -123,15 +128,23 @@ per-core driver path lands.
 
 ---
 
-## 6. Backend implementation plan (drives Phase 2)
+## 6. Backend implementation plan (as actually shipped)
 
-- **Primary backend: `ThermalZonePerfCounter`** — query
-  `Win32_PerfFormattedData_Counters_ThermalZoneInformation` every 1–2 s, filter
-  zones to valid (T > 250 K), convert to °C. Highest valid zone = package.
-- **`PerfOsProcessor` backend** — per-core load %.
-- **`Win32_Processor`** — clocks, core/thread counts, CPU name (used to auto-select
-  the chip profile from the design's chip table for labelling).
-- **`PowerMeter` backend** — package power.
+ARMTEMP's shipped backend (`src-tauri/src/sensors/pdh.rs`) reads these same counters
+**natively via the Windows PDH API** (`pdh.dll`), not via `Get-CimInstance`/WMI — PDH is
+a plain Win32 API that never touches COM, so it also avoids the `WBEM_E_NOT_FOUND`
+failure described in §7.
+
+- **`Thermal Zone Information`** (PDH object) — `Temperature` + `High Precision
+  Temperature` every ~1.5–2 s, filtered to valid zones (T > 250 K), converted to °C.
+  Highest valid zone = package.
+- **`Processor Information`** — `% Processor Time` per core (instances named
+  `group,core`, e.g. `0,3`) and `Processor Frequency` on `_Total` — a genuinely **live**
+  frequency, unlike `Win32_Processor.CurrentClockSpeed` (§1 note below).
+- **Registry + `GetSystemInfo`** — CPU name (`HKLM\HARDWARE\DESCRIPTION\System\
+  CentralProcessor\0\ProcessorNameString`) and logical core count, used to auto-select
+  the chip profile for labelling.
+- **Power** — not wired; confirmed unavailable from userspace (§3).
 - Emit a single `sensor-update` Tauri event each tick with the merged snapshot.
 - Strict real-only contract: any field with no real source is `None` → UI shows "—".
 

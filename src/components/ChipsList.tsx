@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { ChipBadge, tierFromName } from "./ChipBadge";
 
 interface Profile {
   name: string;
@@ -25,7 +26,6 @@ export function ChipsList() {
     { name: "Snapdragon X", model: "X1-26-100", cores: "8 cores" },
     { name: "Snapdragon X Plus", model: "X1P-64-100", cores: "10 cores" },
     { name: "Snapdragon X Elite", model: "X1E-80-100", cores: "12 cores" },
-    { name: "Snapdragon X2", model: "X2-46-100", cores: "12 cores" },
     { name: "Snapdragon X2 Plus", model: "X2P-66-100", cores: "16 cores" },
     { name: "Snapdragon X2 Elite", model: "X2E-88-100", cores: "18 cores" },
   ];
@@ -39,35 +39,34 @@ export function ChipsList() {
       {known.map((c) => {
         const isDetected = detectedMatch && detectedMatch.name === c.name;
         return (
-          <button
+          <label
             key={c.model}
-            className={`radio ${isDetected ? "active" : ""}`}
-            disabled
+            className={`chk-row chk-static ${isDetected ? "" : "chk-dim"}`}
             title={isDetected ? "Detected on this machine" : "Not detected"}
           >
-            <div className={`radio-dot ${isDetected ? "active" : ""}`} />
-            <div>
-              <div className="radio-label">
-                {c.name}
-                {isDetected ? " · detected" : ""}
-              </div>
-              <div className="radio-sub">
-                {c.model} · {c.cores}
-              </div>
-            </div>
-          </button>
+            <input type="radio" checked={!!isDetected} readOnly />
+            <ChipBadge tier={tierFromName(c.name)} size={18} />
+            <span>
+              {c.name}
+              {isDetected ? " · detected" : ""}{" "}
+              <span className="chk-sub">
+                ({c.model} · {c.cores})
+              </span>
+            </span>
+          </label>
         );
       })}
       {profile && !detectedMatch && (
-        <div className="radio active">
-          <div className="radio-dot active" />
-          <div>
-            <div className="radio-label">{profile.name} · detected</div>
-            <div className="radio-sub">
-              {profile.model} · {profile.cores} cores
-            </div>
-          </div>
-        </div>
+        <label className="chk-row chk-static">
+          <input type="radio" checked readOnly />
+          <ChipBadge tier={tierFromName(profile.name)} size={18} />
+          <span>
+            {profile.name} · detected{" "}
+            <span className="chk-sub">
+              ({profile.model} · {profile.cores} cores)
+            </span>
+          </span>
+        </label>
       )}
     </div>
   );
