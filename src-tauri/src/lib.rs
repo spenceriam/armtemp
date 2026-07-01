@@ -259,8 +259,18 @@ fn update_tray(app: &tauri::AppHandle, snap: &SensorSnapshot, settings: &AppSett
 
     let png = sensors::tray::number_icon_png(shown, d.color_rgb, settings.tray_style(), TRAY_ICON_PX);
     if let Some(tray) = app.tray_by_id("main-tray") {
-        let img = tauri::image::Image::new(&png, TRAY_ICON_PX, TRAY_ICON_PX);
-        let _ = tray.set_icon(Some(img));
+        // Image::new expects RAW RGBA pixels — these bytes are PNG-encoded,
+        // so they must go through the PNG decoder (Image::from_bytes).
+        // Passing them to Image::new is the bug that left the default logo
+        // in the tray instead of the temperature number.
+        match tauri::image::Image::from_bytes(&png) {
+            Ok(img) => {
+                if let Err(e) = tray.set_icon(Some(img)) {
+                    eprintln!("[armtemp] tray set_icon failed: {e}");
+                }
+            }
+            Err(e) => eprintln!("[armtemp] tray icon decode failed: {e}"),
+        }
 
         let header = match shown {
             Some(t) => format!("ARMTEMP — {t}°{unit}"),
@@ -291,8 +301,14 @@ fn update_tray(app: &tauri::AppHandle, snap: &SensorSnapshot, settings: &AppSett
             let color = if settings.taskbar_accent { ACCENT_RGB } else { temp_color.unwrap_or((140, 140, 140)) };
             let val = val_c.map(|v| unit_convert(v, is_f));
             let png = sensors::tray::number_icon_png(val, color, sensors::tray::TrayStyle::Badge, TASKBAR_OVERLAY_PX);
-            let img = tauri::image::Image::new(&png, TASKBAR_OVERLAY_PX, TASKBAR_OVERLAY_PX);
-            let _ = w.set_overlay_icon(Some(img));
+            match tauri::image::Image::from_bytes(&png) {
+                Ok(img) => {
+                    if let Err(e) = w.set_overlay_icon(Some(img)) {
+                        eprintln!("[armtemp] taskbar overlay failed: {e}");
+                    }
+                }
+                Err(e) => eprintln!("[armtemp] overlay icon decode failed: {e}"),
+            }
         } else {
             let _ = w.set_overlay_icon(None);
         }
