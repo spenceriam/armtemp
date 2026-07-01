@@ -93,7 +93,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // Notification Area — default tray mode = AVERAGE (per user spec)
   trayOn: true,
   trayMode: "average",
-  trayStyle: "rounded",
+  trayStyle: "plain",
   trayTooltipAllCores: true,
   // Windows Taskbar
   taskbarOn: true,

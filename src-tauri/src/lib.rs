@@ -81,7 +81,7 @@ struct AppSettings {
 fn default_theme() -> String { "dark".into() }
 fn default_c() -> String { "c".into() }
 fn default_tray_mode() -> String { "average".into() }
-fn default_tray_style() -> String { "rounded".into() }
+fn default_tray_style() -> String { "plain".into() }
 fn default_overheat() -> f64 { 95.0 }
 fn default_overheat_action() -> String { "notify".into() }
 fn default_true() -> bool { true }
@@ -251,13 +251,47 @@ fn unit_convert(c_val: f64, is_f: bool) -> i32 {
     if is_f { (c_val * 9.0 / 5.0 + 32.0).round() as i32 } else { c_val.round() as i32 }
 }
 
+/// The Windows SYSTEM theme (taskbar/tray surfaces — distinct from the app
+/// theme setting): true = light taskbar. Read fresh on every tray redraw so
+/// a system theme switch is picked up on the next poll tick.
+fn system_uses_light_theme() -> bool {
+    use windows::core::HSTRING;
+    use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
+    unsafe {
+        let subkey = HSTRING::from(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+        let value = HSTRING::from("SystemUsesLightTheme");
+        let mut data: u32 = 0;
+        let mut size: u32 = std::mem::size_of::<u32>() as u32;
+        let st = RegGetValueW(
+            HKEY_CURRENT_USER,
+            &subkey,
+            &value,
+            RRF_RT_REG_DWORD,
+            None,
+            Some(&mut data as *mut u32 as *mut core::ffi::c_void),
+            Some(&mut size),
+        );
+        st.0 == 0 && data == 1
+    }
+}
+
 fn update_tray(app: &tauri::AppHandle, snap: &SensorSnapshot, settings: &AppSettings) {
     let d = decide(snap, settings.tray_mode());
     let is_f = settings.unit_is_f();
     let unit = if is_f { "F" } else { "C" };
     let shown = d.primary_value.map(|c| unit_convert(c as f64, is_f));
 
-    let png = sensors::tray::number_icon_png(shown, d.color_rgb, settings.tray_style(), TRAY_ICON_PX);
+    // Default (Plain) icon: bare digits on a transparent background, in a
+    // solid color that complements the Windows taskbar theme — near-black on
+    // a light taskbar, white on a dark one. The opt-in Rounded/Badge styles
+    // keep the temperature-colored plates.
+    let style = settings.tray_style();
+    let icon_color = if matches!(style, sensors::tray::TrayStyle::Plain) {
+        if system_uses_light_theme() { (25, 25, 25) } else { (255, 255, 255) }
+    } else {
+        d.color_rgb
+    };
+    let png = sensors::tray::number_icon_png(shown, icon_color, style, TRAY_ICON_PX);
     if let Some(tray) = app.tray_by_id("main-tray") {
         // Image::new expects RAW RGBA pixels — these bytes are PNG-encoded,
         // so they must go through the PNG decoder (Image::from_bytes).
