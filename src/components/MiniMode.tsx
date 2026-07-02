@@ -20,7 +20,7 @@ export function MiniMode({ snap, unit, onExpand, onClose }: Props) {
         <div className="mini-logo">
           <AppIcon size={10} />
         </div>
-        <span className="mini-title">ARMTEMP</span>
+        <span className="mini-title">ARMtemp</span>
         <div className="mini-spacer" />
         <button className="mini-btn" onClick={onExpand} title="Expand">
           ▢

@@ -1,4 +1,4 @@
-// The ARMTEMP thermometer mark, ported from the Clod design's inline SVGs.
+// The ARMtemp thermometer mark, ported from the Clod design's inline SVGs.
 
 interface Props {
   size?: number;

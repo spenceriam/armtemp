@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ARMTEMP",
+  "productName": "ARMtemp",
   "version": "0.2.0",
   "identifier": "com.armtemp.app",
   "build": {
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "ARMTEMP",
+        "title": "ARMtemp",
         "width": 430,
         "height": 620,
         "resizable": false,
@@ -41,7 +41,7 @@
     ],
     "category": "Utility",
     "shortDescription": "Snapdragon X temperature monitor",
-    "longDescription": "ARMTEMP is a native temperature monitor for Snapdragon X, X Plus, X Elite, X2 Plus and X2 Elite processors on Windows on ARM, reading real on-die thermal sensors.",
+    "longDescription": "ARMtemp is a native temperature monitor for Snapdragon X, X Plus, X Elite, X2 Plus and X2 Elite processors on Windows on ARM, reading real on-die thermal sensors.",
     "publisher": "Spencer Francisco",
     "windows": {
       "webviewInstallMode": {

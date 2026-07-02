@@ -1,4 +1,4 @@
-//! ARMTEMP — native Snapdragon X temperature monitor (Tauri 2 backend).
+//! ARMtemp — native Snapdragon X temperature monitor (Tauri 2 backend).
 //!
 //! Wires the native PDH-backed sensor provider to a polling loop that emits a
 //! `sensor-update` event each tick, manages the live tray icon, and exposes
@@ -38,7 +38,7 @@ struct AppState {
     mode_a_item: CheckMenuItem<tauri::Wry>,
     unit_c_item: CheckMenuItem<tauri::Wry>,
     /// The tray context menu — shared with the per-core extra icons in "All
-    /// cores" mode so right-clicking any of them shows the same ARMTEMP menu.
+    /// cores" mode so right-clicking any of them shows the same ARMtemp menu.
     /// (`Menu` is a cheap `Arc`-backed clone, not a duplicate menu.)
     tray_menu: Menu<tauri::Wry>,
     /// IDs of the extra per-core tray icons currently registered (empty
@@ -362,8 +362,8 @@ fn update_tray(app: &tauri::AppHandle, state: &AppState, snap: &SensorSnapshot, 
         let img = number_image(shown, fg, plate);
 
         let header = match shown {
-            Some(t) => format!("ARMTEMP — {t}°{unit}"),
-            None => "ARMTEMP — (no sensor)".to_string(),
+            Some(t) => format!("ARMtemp — {t}°{unit}"),
+            None => "ARMtemp — (no sensor)".to_string(),
         };
         let tooltip = if settings.tray_tooltip_all_cores {
             let mut lines = vec![header];
@@ -381,7 +381,7 @@ fn update_tray(app: &tauri::AppHandle, state: &AppState, snap: &SensorSnapshot, 
 /// "All cores" mode: Core #0 drives the main tray icon; cores 1..N each get
 /// their own extra icon (lazily created, ids tracked in `extra_trays` so a
 /// later mode switch can tear them down). Every icon's number is colored by
-/// ITS OWN temperature and all icons share the same right-click ARMTEMP menu
+/// ITS OWN temperature and all icons share the same right-click ARMtemp menu
 /// (menu-click handling is a single global listener registered once in
 /// `setup()` — see the comment there — so attaching the shared `Menu` here is
 /// enough; no per-icon event handler is needed or wanted).
@@ -427,8 +427,8 @@ fn update_tray_all_cores(
         };
         let img = number_image(val, fg, plate);
         let tooltip = match c.temp_c {
-            Some(t) => format!("ARMTEMP — Core #{}: {}°{unit}", c.index, unit_convert(t, is_f)),
-            None => format!("ARMTEMP — Core #{}: (no sensor)", c.index),
+            Some(t) => format!("ARMtemp — Core #{}: {}°{unit}", c.index, unit_convert(t, is_f)),
+            None => format!("ARMtemp — Core #{}: (no sensor)", c.index),
         };
         set_tray_icon(app, &id, img, &tooltip);
     }
@@ -482,7 +482,7 @@ fn fire_overheat_action(app: &tauri::AppHandle, action: OverheatAction, package_
             let _ = app
                 .notification()
                 .builder()
-                .title("ARMTEMP — overheat")
+                .title("ARMtemp — overheat")
                 .body(format!("Package reached {package_c:.0}°C (threshold {threshold_c:.0}°C)."))
                 .show();
         }
@@ -561,7 +561,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
             // Tray context menu.
-            let open = MenuItem::with_id(app, "open", "Open ARMTEMP", true, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", "Open ARMtemp", true, None::<&str>)?;
             let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let mini = MenuItem::with_id(app, "mini", "Mini-mode", true, None::<&str>)?;
 
@@ -769,5 +769,5 @@ pub fn run() {
             exit_app
         ])
         .run(tauri::generate_context!())
-        .expect("error while running ARMTEMP");
+        .expect("error while running ARMtemp");
 }

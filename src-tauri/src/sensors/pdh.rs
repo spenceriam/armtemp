@@ -88,7 +88,7 @@ impl PdhProvider {
 
 // ---------- worker thread: owns all PDH handles ----------
 
-/// One open PDH query with the counters ARMTEMP needs. Closed on drop.
+/// One open PDH query with the counters ARMtemp needs. Closed on drop.
 struct Query {
     hquery: isize,
     zone_temp: isize,

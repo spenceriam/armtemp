@@ -185,12 +185,12 @@ function GeneralTab({
     <>
       <Group legend="Startup">
         <Check
-          label="Start ARMTEMP with Windows"
+          label="Start ARMtemp with Windows"
           checked={settings.startWithWindows}
           onChange={(v) => update({ startWithWindows: v })}
         />
         <Check
-          label="Start ARMTEMP minimized"
+          label="Start ARMtemp minimized"
           checked={settings.startMinimized}
           onChange={(v) => update({ startMinimized: v })}
         />
@@ -235,7 +235,7 @@ function DisplayTab({
           onChange={(v) => update({ tempUnit: v ? "F" : "C" })}
         />
         <Check
-          label="Close ARMTEMP to the notification area"
+          label="Close ARMtemp to the notification area"
           checked={settings.closeToTray}
           onChange={(v) => update({ closeToTray: v })}
         />
@@ -307,7 +307,7 @@ function NotifTab({
     <>
       <Group legend="Notification area icon">
         <Check
-          label="Show ARMTEMP in the notification area"
+          label="Show ARMtemp in the notification area"
           checked={settings.trayOn}
           onChange={(v) => update({ trayOn: v })}
         />

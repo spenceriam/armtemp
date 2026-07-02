@@ -1,4 +1,4 @@
-# ARMTEMP — Sensor Discovery Report (Phase 0)
+# ARMtemp — Sensor Discovery Report (Phase 0)
 
 Probed on: **Snapdragon X 10-core X1P64100 @ 3.40 GHz** (Snapdragon X Plus),
 **Windows 11 Pro Build 26200, ARM 64-bit**. Machine is a Surface-class device
@@ -90,7 +90,7 @@ Devices/drivers:
 `Power Meter` perf-counter set (`Win32_PerfFormattedData_PowerMeter_*` / the native PDH
 `Power Meter` object) returns **no instances** on this firmware — confirmed empty via
 both `Get-CimInstance` and a native PDH query. Package power is therefore genuinely
-unavailable from any userspace surface found so far; ARMTEMP shows `power_w: None` → "—"
+unavailable from any userspace surface found so far; ARMtemp shows `power_w: None` → "—"
 honestly rather than wiring up a value that doesn't exist. Reading it would require the
 same driver-IOCTL route as per-core temperature (§5).
 
@@ -130,7 +130,7 @@ per-core driver path lands.
 
 ## 6. Backend implementation plan (as actually shipped)
 
-ARMTEMP's shipped backend (`src-tauri/src/sensors/pdh.rs`) reads these same counters
+ARMtemp's shipped backend (`src-tauri/src/sensors/pdh.rs`) reads these same counters
 **natively via the Windows PDH API** (`pdh.dll`), not via `Get-CimInstance`/WMI — PDH is
 a plain Win32 API that never touches COM, so it also avoids the `WBEM_E_NOT_FOUND`
 failure described in §7.

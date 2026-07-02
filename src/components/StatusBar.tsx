@@ -6,9 +6,11 @@ interface Props {
   unit: "C" | "F";
 }
 
-// The sunken status bar footer: CPU Temp / Avg / Low / High. All real values.
+// The sunken status bar footer: Avg Core Temp / Low / High. All real values.
+// (No single "CPU Temp" — Snapdragon X exposes zone temps mapped to cores, not
+// one authoritative package sensor, so a lone number would misrepresent which
+// core it came from.)
 export function StatusBar({ snap, unit }: Props) {
-  const pkg = snap?.package_c ?? null;
   const avg = snap?.average_c ?? null;
   const lows = snap?.cores.map((c) => c.min_c).filter((t): t is number => t !== null) ?? [];
   const highs = snap?.cores.map((c) => c.max_c).filter((t): t is number => t !== null) ?? [];
@@ -17,11 +19,7 @@ export function StatusBar({ snap, unit }: Props) {
   return (
     <div className="status-bar">
       <span className="sb-item">
-        <span className="sb-label">CPU Temp:</span> {formatTemp(pkg, unit)}
-      </span>
-      <span className="sb-sep" />
-      <span className="sb-item">
-        <span className="sb-label">Avg:</span> {formatTemp(avg, unit)}
+        <span className="sb-label">Avg Core Temp:</span> {formatTemp(avg, unit)}
       </span>
       <span className="sb-sep" />
       <span className="sb-item">

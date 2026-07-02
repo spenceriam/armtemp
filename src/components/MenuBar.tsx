@@ -116,7 +116,7 @@ export function MenuBar({
         {openMenu === "help" && (
           <div className="menu-drop" role="menu">
             <button className="menu-entry" role="menuitem" onClick={() => run(onOpenAbout)}>
-              About ARMTEMP
+              About ARMtemp
             </button>
           </div>
         )}

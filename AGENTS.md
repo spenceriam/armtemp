@@ -7,7 +7,7 @@
 - Run Rust check (no codegen): `cargo check --manifest-path src-tauri/Cargo.toml`
 - Run linter: `cargo clippy --manifest-path src-tauri/Cargo.toml`
 ## Project overview
-ARMTEMP is a native temperature monitor for Snapdragon X / X2 processors (Qualcomm Oryon) on Windows on ARM (ARM64). Built with Tauri 2 (Rust backend) + React 18 (TypeScript frontend), it reads real on-die thermal sensors via ACPI thermal zones and displays per-core temperatures, loads, and power. The app recreates the Core Temp experience for the Snapdragon X family, with a live system-tray icon, mini-mode, and classic Win32-style dialogs: a 4-tab Settings dialog (General / Display / Notification Area / Windows Taskbar, native checkboxes, OK/Cancel/Apply), a separate Overheat protection dialog (Options menu), and an About dialog (Help menu). All telemetry is strictly real — no simulated or fallback values anywhere.
+ARMtemp is a native temperature monitor for Snapdragon X / X2 processors (Qualcomm Oryon) on Windows on ARM (ARM64). Built with Tauri 2 (Rust backend) + React 18 (TypeScript frontend), it reads real on-die thermal sensors via ACPI thermal zones and displays per-core temperatures, loads, and power. The app recreates the Core Temp experience for the Snapdragon X family, with a live system-tray icon, mini-mode, and classic Win32-style dialogs: a 4-tab Settings dialog (General / Display / Notification Area / Windows Taskbar, native checkboxes, OK/Cancel/Apply), a separate Overheat protection dialog (Options menu), and an About dialog (Help menu). All telemetry is strictly real — no simulated or fallback values anywhere.
 ## Development workflow discipline
 - **CRITICAL**: NEVER commit or push changes without explicit user approval
 - **ALWAYS** ask for user confirmation before any git operations
@@ -141,7 +141,7 @@ Users can always override AI agent version decisions:
 ## Main window layout structure
 The application displays all sensor information in a single window matching Core Temp's actual layout:
 1. **Native title bar** — the OS draws it (icon, title, minimize/close); the window is decorated and opaque (no custom chrome, no transparency/blur). Dark/light native chrome follows the app theme via `getCurrentWindow().setTheme()`.
-2. **Menu Bar** (`src/components/MenuBar.tsx`) — File (Exit) / Options (Settings, Overheat protection, Toggle Mini Mode, Always on top) / Tools (Refresh sensors) / Help (About ARMTEMP). Rendered as themed HTML dropdowns (a native HMENU doesn't follow dark/light mode on Windows) styled to look like real Win32 menus. No unit toggle — Fahrenheit lives in Settings → Display. Launch flags `--settings` / `--overheat` / `--about` deep-link the dialogs.
+2. **Menu Bar** (`src/components/MenuBar.tsx`) — File (Exit) / Options (Settings, Overheat protection, Toggle Mini Mode, Always on top) / Tools (Refresh sensors) / Help (About ARMtemp). Rendered as themed HTML dropdowns (a native HMENU doesn't follow dark/light mode on Windows) styled to look like real Win32 menus. No unit toggle — Fahrenheit lives in Settings → Display. Launch flags `--settings` / `--overheat` / `--about` deep-link the dialogs.
 3. **Select CPU** row (combo + `[N] Core(s) [N] Thread(s)` sunken count boxes) + **Processor Information** group box (Win32 etched border, sunken read-only value fields): Model / Platform / Frequency / CPUID full rows; `Boost | Lithography` and `Throttle | TDP` pairs. VID and Revision are intentionally omitted (permanently unavailable on Snapdragon X); Throttle is the live ACPI passive-limit status (red "Yes" while the firmware throttles).
 4. **Temperature Readings** group box — Tj. Max row, per-core rows (Core # | Temp. | Min. | Max. | Load) with **colored temperature text** (no dots, no progress bars — the color itself carries the meaning), Power row.
 5. **Status Bar** — thin native strip with CPU Temp / Avg / Low / High.
@@ -188,7 +188,7 @@ The application displays all sensor information in a single window matching Core
 - Test all 3 layouts (Classic, Cards, Dashboard)
 ## Build and deployment
 - Native target: **Windows ARM64** (`aarch64-pc-windows-msvc`). The binary is genuinely ARM64 — no x64 emulation.
-- Installers: MSI + NSIS, produced by `npm run tauri build`, named `ARMTEMP_<version>_arm64_*.msi` / `-setup.exe`.
+- Installers: MSI + NSIS, produced by `npm run tauri build`, named `ARMtemp_<version>_arm64_*.msi` / `-setup.exe`.
 - The frontend builds to `dist/`, which Tauri bundles into the native binary.
 - Release profile: optimized (`lto`, `strip`, `opt-level = "s"`).
 ## Common pitfalls
