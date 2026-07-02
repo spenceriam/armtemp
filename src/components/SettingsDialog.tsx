@@ -336,7 +336,7 @@ function NotifTab({
           name="trayMode"
           value="all"
           current={settings.trayMode}
-          label="All cores (hottest shown)"
+          label="All cores (one icon per core)"
           onChange={(v) => update({ trayMode: v })}
         />
         <Radio<TrayMode>

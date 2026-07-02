@@ -37,6 +37,15 @@ struct AppState {
     /// Tray-menu checkmarks kept in sync with settings from `update_settings`.
     mode_a_item: CheckMenuItem<tauri::Wry>,
     unit_c_item: CheckMenuItem<tauri::Wry>,
+    /// The tray context menu — shared with the per-core extra icons in "All
+    /// cores" mode so right-clicking any of them shows the same ARMTEMP menu.
+    /// (`Menu` is a cheap `Arc`-backed clone, not a duplicate menu.)
+    tray_menu: Menu<tauri::Wry>,
+    /// IDs of the extra per-core tray icons currently registered (empty
+    /// unless trayMode == "all"). Plain `std::sync::Mutex`: only ever locked
+    /// inside the synchronous `update_tray()` body, never held across an
+    /// `.await`.
+    extra_trays: std::sync::Mutex<Vec<String>>,
 }
 
 /// Once an overheat action fires, require the package temp to drop this many
@@ -197,7 +206,7 @@ fn refresh_now(state: tauri::State<'_, Arc<AppState>>, app: tauri::AppHandle) {
         s.tick = *tick;
         drop(tick);
         let settings = state.settings.blocking_lock().clone();
-        update_tray(&app, &s, &settings);
+        update_tray(&app, &state, &s, &settings);
         *state.latest.blocking_lock() = Some(s.clone());
         let _ = app.emit("sensor-update", s);
     }
@@ -235,15 +244,11 @@ fn update_settings(
     }
 
     if let Some(snap) = state.latest.blocking_lock().clone() {
-        update_tray(&app, &snap, &parsed);
+        update_tray(&app, &state, &snap, &parsed);
     }
     Ok(())
 }
 
-/// Redraw the tray icon (and, on Windows, the taskbar overlay badge) from the
-/// real snapshot + user settings.
-const TRAY_ICON_PX: u32 = 48;
-const TASKBAR_OVERLAY_PX: u32 = 32;
 /// Windows accent blue — matches `ACCENT` in `src/app/theme.ts`.
 const ACCENT_RGB: (u8, u8, u8) = (0, 120, 212);
 
@@ -275,36 +280,86 @@ fn system_uses_light_theme() -> bool {
     }
 }
 
-fn update_tray(app: &tauri::AppHandle, snap: &SensorSnapshot, settings: &AppSettings) {
-    let d = decide(snap, settings.tray_mode());
+/// Theme-adaptive monochrome for the default (Plain-style) tray icon: white
+/// text on a dark taskbar, near-black on a light one.
+fn mono_color() -> (u8, u8, u8) {
+    if system_uses_light_theme() { (25, 25, 25) } else { (255, 255, 255) }
+}
+
+/// Darken a temperature color ~28% on a light taskbar so yellow/green stay
+/// legible against the light notification-area background; left unchanged on
+/// a dark taskbar where the existing scale already reads well.
+fn adapt_for_taskbar(rgb: (u8, u8, u8)) -> (u8, u8, u8) {
+    if system_uses_light_theme() {
+        let (r, g, b) = rgb;
+        ((r as f32 * 0.72) as u8, (g as f32 * 0.72) as u8, (b as f32 * 0.72) as u8)
+    } else {
+        rgb
+    }
+}
+
+/// Build a tray/overlay image for `value` using the native-font renderer.
+/// `None` draws an honest dash — never a fabricated number.
+fn number_image(
+    value: Option<i32>,
+    fg: (u8, u8, u8),
+    plate: Option<((u8, u8, u8), sensors::tray::TrayStyle)>,
+) -> tauri::image::Image<'static> {
+    let size = sensors::tray_render::tray_icon_size();
+    let text = match value {
+        Some(v) => v.to_string(),
+        None => "-".to_string(),
+    };
+    let rgba = sensors::tray_render::render_number_rgba(&text, fg, plate, size);
+    tauri::image::Image::new_owned(rgba, size, size)
+}
+
+fn core_tooltip_lines(snap: &SensorSnapshot, is_f: bool, unit: &str) -> Vec<String> {
+    snap.cores
+        .iter()
+        .map(|c| {
+            let v = c.temp_c.map(|v| format!("{}°{unit}", unit_convert(v, is_f)));
+            format!("Core #{}: {}", c.index, v.as_deref().unwrap_or("—"))
+        })
+        .collect()
+}
+
+fn set_tray_icon(app: &tauri::AppHandle, id: &str, img: tauri::image::Image<'static>, tooltip: &str) {
+    if let Some(tray) = app.tray_by_id(id) {
+        if let Err(e) = tray.set_icon(Some(img)) {
+            eprintln!("[armtemp] tray '{id}' set_icon failed: {e}");
+        }
+        let _ = tray.set_tooltip(Some(tooltip));
+    }
+}
+
+/// Redraw the tray icon(s) (and, on Windows, the taskbar overlay badge) from
+/// the real snapshot + user settings. Exactly one tray icon exists unless the
+/// user picked "All cores" mode, in which case Core #0 drives the main icon
+/// and every other core gets its own extra icon — see `AppState::extra_trays`.
+fn update_tray(app: &tauri::AppHandle, state: &AppState, snap: &SensorSnapshot, settings: &AppSettings) {
     let is_f = settings.unit_is_f();
     let unit = if is_f { "F" } else { "C" };
-    let shown = d.primary_value.map(|c| unit_convert(c as f64, is_f));
-
-    // Default (Plain) icon: bare digits on a transparent background, in a
-    // solid color that complements the Windows taskbar theme — near-black on
-    // a light taskbar, white on a dark one. The opt-in Rounded/Badge styles
-    // keep the temperature-colored plates.
     let style = settings.tray_style();
-    let icon_color = if matches!(style, sensors::tray::TrayStyle::Plain) {
-        if system_uses_light_theme() { (25, 25, 25) } else { (255, 255, 255) }
+    let mode = settings.tray_mode();
+
+    if matches!(mode, TrayMode::All) {
+        update_tray_all_cores(app, state, snap, style, is_f, unit);
     } else {
-        d.color_rgb
-    };
-    let png = sensors::tray::number_icon_png(shown, icon_color, style, TRAY_ICON_PX);
-    if let Some(tray) = app.tray_by_id("main-tray") {
-        // Image::new expects RAW RGBA pixels — these bytes are PNG-encoded,
-        // so they must go through the PNG decoder (Image::from_bytes).
-        // Passing them to Image::new is the bug that left the default logo
-        // in the tray instead of the temperature number.
-        match tauri::image::Image::from_bytes(&png) {
-            Ok(img) => {
-                if let Err(e) = tray.set_icon(Some(img)) {
-                    eprintln!("[armtemp] tray set_icon failed: {e}");
-                }
-            }
-            Err(e) => eprintln!("[armtemp] tray icon decode failed: {e}"),
-        }
+        // Leaving (or never entering) "All cores" mode: tear down any
+        // leftover per-core extras from a previous mode switch first.
+        teardown_extra_trays(app, state);
+
+        let d = decide(snap, mode);
+        let shown = d.primary_value.map(|c| unit_convert(c as f64, is_f));
+        // Default (Plain) icon: bare digits, no plate, colored to complement
+        // the taskbar theme. The opt-in Rounded/Badge styles keep a
+        // temperature-colored plate under white digits.
+        let (fg, plate) = match style {
+            sensors::tray::TrayStyle::Plain => (mono_color(), None),
+            _ => ((255, 255, 255), Some((adapt_for_taskbar(d.color_rgb), style))),
+        };
+        let img = number_image(shown, fg, plate);
 
         let header = match shown {
             Some(t) => format!("ARMTEMP — {t}°{unit}"),
@@ -312,19 +367,92 @@ fn update_tray(app: &tauri::AppHandle, snap: &SensorSnapshot, settings: &AppSett
         };
         let tooltip = if settings.tray_tooltip_all_cores {
             let mut lines = vec![header];
-            for c in &snap.cores {
-                let core_val = c.temp_c.map(|v| format!("{}°{unit}", unit_convert(v, is_f)));
-                lines.push(format!("Core #{}: {}", c.index, core_val.as_deref().unwrap_or("—")));
-            }
+            lines.extend(core_tooltip_lines(snap, is_f, unit));
             lines.join("\n")
         } else {
             header
         };
-        let _ = tray.set_tooltip(Some(tooltip));
+        set_tray_icon(app, "main-tray", img, &tooltip);
     }
 
-    // Windows taskbar overlay badge — same digit renderer, smaller + no plate
-    // (Plain-style) so it reads clearly at the small overlay size.
+    update_taskbar_overlay(app, snap, settings, is_f);
+}
+
+/// "All cores" mode: Core #0 drives the main tray icon; cores 1..N each get
+/// their own extra icon (lazily created, ids tracked in `extra_trays` so a
+/// later mode switch can tear them down). Every icon's number is colored by
+/// ITS OWN temperature and all icons share the same right-click ARMTEMP menu
+/// (menu-click handling is a single global listener registered once in
+/// `setup()` — see the comment there — so attaching the shared `Menu` here is
+/// enough; no per-icon event handler is needed or wanted).
+fn update_tray_all_cores(
+    app: &tauri::AppHandle,
+    state: &AppState,
+    snap: &SensorSnapshot,
+    style: sensors::tray::TrayStyle,
+    is_f: bool,
+    unit: &str,
+) {
+    let mut extras = state.extra_trays.lock().unwrap_or_else(|e| e.into_inner());
+
+    for (i, c) in snap.cores.iter().enumerate() {
+        let id = if i == 0 { "main-tray".to_string() } else { format!("armtemp-core-{i}") };
+
+        if i > 0 && !extras.contains(&id) {
+            match TrayIconBuilder::with_id(id.clone())
+                .menu(&state.tray_menu)
+                .show_menu_on_left_click(false)
+                .build(app)
+            {
+                Ok(_) => extras.push(id.clone()),
+                Err(e) => eprintln!("[armtemp] failed to create tray '{id}': {e}"),
+            }
+        }
+
+        let val = c.temp_c.map(|v| unit_convert(v, is_f));
+        let (fg, plate) = match style {
+            sensors::tray::TrayStyle::Plain => (
+                c.temp_c
+                    .map(|t| adapt_for_taskbar(sensors::tray::temp_color(t, snap.tjmax_c)))
+                    .unwrap_or_else(mono_color),
+                None,
+            ),
+            _ => {
+                let color = c
+                    .temp_c
+                    .map(|t| sensors::tray::temp_color(t, snap.tjmax_c))
+                    .unwrap_or((140, 140, 140));
+                ((255, 255, 255), Some((adapt_for_taskbar(color), style)))
+            }
+        };
+        let img = number_image(val, fg, plate);
+        let tooltip = match c.temp_c {
+            Some(t) => format!("ARMTEMP — Core #{}: {}°{unit}", c.index, unit_convert(t, is_f)),
+            None => format!("ARMTEMP — Core #{}: (no sensor)", c.index),
+        };
+        set_tray_icon(app, &id, img, &tooltip);
+    }
+
+    // Defensive: if the core count ever shrinks, drop extras beyond it.
+    let keep = snap.cores.len().saturating_sub(1);
+    if extras.len() > keep {
+        for id in extras.split_off(keep) {
+            app.remove_tray_by_id(&id);
+        }
+    }
+}
+
+/// Remove every per-core extra tray icon (used when leaving "All cores" mode).
+fn teardown_extra_trays(app: &tauri::AppHandle, state: &AppState) {
+    let mut extras = state.extra_trays.lock().unwrap_or_else(|e| e.into_inner());
+    for id in extras.drain(..) {
+        app.remove_tray_by_id(&id);
+    }
+}
+
+/// Windows taskbar overlay badge — same native-font renderer as the tray,
+/// always drawn as a colored Badge plate so it reads at the tiny overlay size.
+fn update_taskbar_overlay(app: &tauri::AppHandle, snap: &SensorSnapshot, settings: &AppSettings, is_f: bool) {
     #[cfg(target_os = "windows")]
     if let Some(w) = app.get_webview_window("main") {
         if settings.taskbar_on {
@@ -334,14 +462,9 @@ fn update_tray(app: &tauri::AppHandle, snap: &SensorSnapshot, settings: &AppSett
             };
             let color = if settings.taskbar_accent { ACCENT_RGB } else { temp_color.unwrap_or((140, 140, 140)) };
             let val = val_c.map(|v| unit_convert(v, is_f));
-            let png = sensors::tray::number_icon_png(val, color, sensors::tray::TrayStyle::Badge, TASKBAR_OVERLAY_PX);
-            match tauri::image::Image::from_bytes(&png) {
-                Ok(img) => {
-                    if let Err(e) = w.set_overlay_icon(Some(img)) {
-                        eprintln!("[armtemp] taskbar overlay failed: {e}");
-                    }
-                }
-                Err(e) => eprintln!("[armtemp] overlay icon decode failed: {e}"),
+            let img = number_image(val, (255, 255, 255), Some((color, sensors::tray::TrayStyle::Badge)));
+            if let Err(e) = w.set_overlay_icon(Some(img)) {
+                eprintln!("[armtemp] taskbar overlay failed: {e}");
             }
         } else {
             let _ = w.set_overlay_icon(None);
@@ -417,7 +540,7 @@ fn start_poll_loop(app: tauri::AppHandle, state: Arc<AppState>) {
                     }
                 }
 
-                update_tray(&app, &snap, &settings);
+                update_tray(&app, &state, &snap, &settings);
                 *state.latest.lock().await = Some(snap.clone());
                 let _ = app.emit("sensor-update", snap);
             }
@@ -477,10 +600,21 @@ pub fn run() {
                     &exit,
                 ],
             )?;
+            // Seed with a dash (no reading yet) in theme-adaptive monochrome
+            // so the tray's identity is "the number" from the very first
+            // frame — never the generic app logo.
             let _tray = TrayIconBuilder::with_id("main-tray")
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(number_image(None, mono_color(), None))
                 .menu(&menu)
                 .show_menu_on_left_click(false)
+                // This listener is registered globally (see tauri's
+                // `shared_app_impl!` — `TrayIconBuilder::on_menu_event` and
+                // `AppHandle::on_menu_event` both push into the SAME
+                // app-wide listener list), so it already fires for menu
+                // clicks from the "All cores" mode's extra per-core tray
+                // icons too. Do NOT also call `.on_menu_event()` on those —
+                // that would register this closure a second time and fire
+                // every action (including "exit") once per registered tray.
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => {
                         if let Some(w) = app.get_webview_window("main") {
@@ -558,6 +692,8 @@ pub fn run() {
                 overheat_armed: Mutex::new(true),
                 mode_a_item: mode_a.clone(),
                 unit_c_item: unit_c.clone(),
+                tray_menu: menu.clone(),
+                extra_trays: std::sync::Mutex::new(Vec::new()),
             });
             app.manage(state.clone());
 

@@ -123,13 +123,13 @@ Users can always override AI agent version decisions:
 - **Backend**: Rust (Tauri 2), native ARM64 binary
 - **Sensors**: Real telemetry via the native Windows PDH API (ACPI thermal zones, per-core load, live CPU frequency); CPU identity via the registry + `GetSystemInfo`
 - **State Management**: React hooks (useState, useEffect, useCallback)
-- **Tray**: Tauri tray-icon plugin, live-updating temperature icon
+- **Tray**: Exactly one tray icon by default (do NOT re-add the `app.trayIcon` block to `tauri.conf.json` — it duplicates the runtime-built icon). The number is rendered with the native system font via GDI (`sensors/tray_render.rs`, Windows-only, behind a small `tray_icon_size()`/`render_number_rgba()` seam so a macOS menu-bar or Linux tray backend can implement the same two functions later). "All cores" mode is the one exception: it shows one extra tray icon per core beyond #0, each colored by its own temperature, all sharing the same right-click menu; Windows does not guarantee notification-area icon ordering.
 - **Settings Persistence**: Tauri store plugin (JSON in app data folder)
 ## Key directories
 - `src/app/` - TypeScript types, theme tokens, hooks (useSettings, useSensors)
 - `src/components/` - React components (MenuBar, ProcessorInfo, TempTable, SettingsDialog, OverheatDialog, AboutDialog, MiniMode)
 - `src-tauri/src/` - Rust backend (lib.rs = app wiring, sensors/ = telemetry)
-- `src-tauri/src/sensors/` - Sensor providers (pdh.rs = primary, chips.rs = profiles, tray.rs = icon rendering, types.rs = data shapes)
+- `src-tauri/src/sensors/` - Sensor providers (pdh.rs = primary, chips.rs = profiles, tray.rs = color/mode logic, tray_render.rs = Windows GDI digit rendering, types.rs = data shapes)
 - `tools/` - Phase 0 sensor probe scripts (PowerShell) + icon generator
 ## Real-data contract (CRITICAL)
 - **All telemetry must be REAL.** No simulated, random, or fallback values anywhere.

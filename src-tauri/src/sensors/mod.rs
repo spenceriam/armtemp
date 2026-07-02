@@ -2,6 +2,8 @@
 pub mod chips;
 pub mod pdh;
 pub mod tray;
+#[cfg(target_os = "windows")]
+pub mod tray_render;
 pub mod types;
 
 pub use chips::ChipProfile;
