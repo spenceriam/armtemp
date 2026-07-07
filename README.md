@@ -49,8 +49,13 @@ ARMtemp reads real ACPI thermal-zone sensors and displays a single honest CPU te
 <table>
   <tr>
     <td align="center"><img src="docs/screenshots/main-window.png" width="260"><br><sub>Main window (Classic layout)</sub></td>
+    <td align="center"><img src="docs/screenshots/cards-view.png" width="260"><br><sub>Cards layout</sub></td>
+    <td align="center"><img src="docs/screenshots/dashboard-view.png" width="260"><br><sub>Dashboard layout</sub></td>
+  </tr>
+  <tr>
     <td align="center"><img src="docs/screenshots/mini-mode.png" width="260"><br><sub>Mini mode</sub></td>
     <td align="center"><img src="docs/screenshots/overheat-protection.png" width="260"><br><sub>Overheat protection</sub></td>
+    <td align="center"><img src="docs/screenshots/tray-icon.png" width="260"><br><sub>Live tray icon</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/settings-general.png" width="260"><br><sub>Settings — General</sub></td>
@@ -59,7 +64,7 @@ ARMtemp reads real ACPI thermal-zone sensors and displays a single honest CPU te
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/settings-taskbar.png" width="260"><br><sub>Settings — Windows Taskbar</sub></td>
-    <td align="center"><img src="docs/screenshots/tray-icon.png" width="260"><br><sub>Live tray icon</sub></td>
+    <td></td>
     <td></td>
   </tr>
 </table>

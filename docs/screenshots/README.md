@@ -3,6 +3,8 @@
 Referenced by the repo's top-level `README.md`:
 
 - `main-window.png` — the main Classic-layout window (Processor Information + Temperature Readings table)
+- `cards-view.png` — Cards layout (per-core load tiles)
+- `dashboard-view.png` — Dashboard layout (CPU temperature + sparkline over the load tiles)
 - `mini-mode.png` — mini mode
 - `overheat-protection.png` — the Overheat protection dialog (Options menu)
 - `settings-general.png` — Settings → General tab
