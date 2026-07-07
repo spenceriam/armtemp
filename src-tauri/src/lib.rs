@@ -13,7 +13,7 @@ mod sensors;
 use std::sync::Arc;
 use std::time::Duration;
 
-use sensors::{tray::{decide, TrayMode}, ChipProfile, PdhProvider, SensorSnapshot};
+use sensors::{tray::decide, ChipProfile, PdhProvider, SensorSnapshot};
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -92,18 +92,8 @@ struct AppState {
     /// temp drops `OVERHEAT_REARM_MARGIN_C` below the threshold. Prevents
     /// re-notifying (or re-sleeping/-shutting-down) every poll tick while hot.
     overheat_armed: Mutex<bool>,
-    /// Tray-menu checkmarks kept in sync with settings from `update_settings`.
-    mode_a_item: CheckMenuItem<tauri::Wry>,
+    /// Tray-menu checkmark kept in sync with settings from `update_settings`.
     unit_c_item: CheckMenuItem<tauri::Wry>,
-    /// The tray context menu — shared with the per-core extra icons in "All
-    /// cores" mode so right-clicking any of them shows the same ARMtemp menu.
-    /// (`Menu` is a cheap `Arc`-backed clone, not a duplicate menu.)
-    tray_menu: Menu<tauri::Wry>,
-    /// IDs of the extra per-core tray icons currently registered (empty
-    /// unless trayMode == "all"). Plain `std::sync::Mutex`: only ever locked
-    /// inside the synchronous `update_tray()` body, never held across an
-    /// `.await`.
-    extra_trays: std::sync::Mutex<Vec<String>>,
 }
 
 /// Once an overheat action fires, require the package temp to drop this many
@@ -114,8 +104,6 @@ const OVERHEAT_REARM_MARGIN_C: f64 = 5.0;
 struct AppSettings {
     #[serde(rename = "tempUnit", default = "default_c")]
     temp_unit: String,
-    #[serde(rename = "trayMode", default = "default_tray_mode")]
-    tray_mode: String,
     #[serde(rename = "trayStyle", default = "default_tray_style")]
     tray_style: String,
     #[serde(rename = "overheatOn", default)]
@@ -136,8 +124,6 @@ struct AppSettings {
     tray_tooltip_all_cores: bool,
     #[serde(rename = "taskbarOn", default = "default_true")]
     taskbar_on: bool,
-    #[serde(rename = "taskbarMode", default = "default_taskbar_mode")]
-    taskbar_mode: String,
     #[serde(rename = "taskbarAccent", default = "default_true")]
     taskbar_accent: bool,
     /// UI theme: "system" | "dark" | "light". Mirrored from the frontend so
@@ -147,13 +133,11 @@ struct AppSettings {
 }
 fn default_theme() -> String { "dark".into() }
 fn default_c() -> String { "c".into() }
-fn default_tray_mode() -> String { "average".into() }
 fn default_tray_style() -> String { "plain".into() }
 fn default_overheat() -> f64 { 95.0 }
 fn default_overheat_action() -> String { "notify".into() }
 fn default_true() -> bool { true }
 fn default_polling_ms() -> u64 { 1500 }
-fn default_taskbar_mode() -> String { "per-core".into() }
 /// Polling interval is user-controlled but must stay sane — never busy-loop
 /// the PDH query, never sleep so long the UI feels dead.
 const MIN_POLL_MS: u64 = 500;
@@ -163,7 +147,6 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             temp_unit: default_c(),
-            tray_mode: default_tray_mode(),
             tray_style: default_tray_style(),
             overheat_on: false,
             overheat_threshold_c: default_overheat(),
@@ -174,7 +157,6 @@ impl Default for AppSettings {
             tray_on: true,
             tray_tooltip_all_cores: true,
             taskbar_on: true,
-            taskbar_mode: default_taskbar_mode(),
             taskbar_accent: true,
             theme: default_theme(),
         }
@@ -188,21 +170,7 @@ enum OverheatAction {
     Shutdown,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum TaskbarMode {
-    PerCore,
-    Average,
-}
-
 impl AppSettings {
-    fn tray_mode(&self) -> TrayMode {
-        match self.tray_mode.as_str() {
-            "all" => TrayMode::All,
-            "average" => TrayMode::Average,
-            "package" => TrayMode::Package,
-            _ => TrayMode::Highest,
-        }
-    }
     fn tray_style(&self) -> sensors::tray::TrayStyle {
         match self.tray_style.as_str() {
             "badge" => sensors::tray::TrayStyle::Badge,
@@ -218,12 +186,6 @@ impl AppSettings {
             "sleep" => OverheatAction::Sleep,
             "shutdown" => OverheatAction::Shutdown,
             _ => OverheatAction::Notify,
-        }
-    }
-    fn taskbar_mode(&self) -> TaskbarMode {
-        match self.taskbar_mode.as_str() {
-            "average" => TaskbarMode::Average,
-            _ => TaskbarMode::PerCore,
         }
     }
     fn polling_interval(&self) -> Duration {
@@ -264,7 +226,7 @@ fn refresh_now(state: tauri::State<'_, Arc<AppState>>, app: tauri::AppHandle) {
         s.tick = *tick;
         drop(tick);
         let settings = state.settings.blocking_lock().clone();
-        update_tray(&app, &state, &s, &settings);
+        update_tray(&app, &s, &settings);
         *state.latest.blocking_lock() = Some(s.clone());
         let _ = app.emit("sensor-update", s);
     }
@@ -279,9 +241,8 @@ fn update_settings(
     let parsed: AppSettings = serde_json::from_value(settings).unwrap_or_default();
     *state.settings.blocking_lock() = parsed.clone();
 
-    // Keep the tray's own checkmarks honest — they're driven by settings now,
-    // not frozen at their build-time default.
-    let _ = state.mode_a_item.set_checked(parsed.tray_mode == "average");
+    // Keep the tray's own checkmark honest — it's driven by settings now,
+    // not frozen at its build-time default.
     let _ = state.unit_c_item.set_checked(!parsed.unit_is_f());
 
     if let Some(tray) = app.tray_by_id("main-tray") {
@@ -302,7 +263,7 @@ fn update_settings(
     }
 
     if let Some(snap) = state.latest.blocking_lock().clone() {
-        update_tray(&app, &state, &snap, &parsed);
+        update_tray(&app, &snap, &parsed);
     }
     Ok(())
 }
@@ -372,11 +333,13 @@ fn number_image(
     tauri::image::Image::new_owned(rgba, size, size)
 }
 
-fn core_tooltip_lines(snap: &SensorSnapshot, is_f: bool, unit: &str) -> Vec<String> {
+/// Per-core LOAD lines for the tray tooltip (load is genuinely per-core;
+/// there is no per-core temperature on this firmware — see `decide()`).
+fn core_tooltip_lines(snap: &SensorSnapshot) -> Vec<String> {
     snap.cores
         .iter()
         .map(|c| {
-            let v = c.temp_c.map(|v| format!("{}°{unit}", unit_convert(v, is_f)));
+            let v = c.load.map(|v| format!("{}%", v.round() as i32));
             format!("Core #{}: {}", c.index, v.as_deref().unwrap_or("—"))
         })
         .collect()
@@ -391,128 +354,40 @@ fn set_tray_icon(app: &tauri::AppHandle, id: &str, img: tauri::image::Image<'sta
     }
 }
 
-/// Redraw the tray icon(s) (and, on Windows, the taskbar overlay badge) from
-/// the real snapshot + user settings. Exactly one tray icon exists unless the
-/// user picked "All cores" mode, in which case Core #0 drives the main icon
-/// and every other core gets its own extra icon — see `AppState::extra_trays`.
-fn update_tray(app: &tauri::AppHandle, state: &AppState, snap: &SensorSnapshot, settings: &AppSettings) {
+/// Redraw the tray icon (and, on Windows, the taskbar overlay badge) from the
+/// real snapshot + user settings. There is exactly one tray icon: it always
+/// shows the single honest CPU temperature — there is no per-core sensor on
+/// this firmware to drive a per-core tray mode.
+fn update_tray(app: &tauri::AppHandle, snap: &SensorSnapshot, settings: &AppSettings) {
     let is_f = settings.unit_is_f();
     let unit = if is_f { "F" } else { "C" };
     let style = settings.tray_style();
-    let mode = settings.tray_mode();
 
-    if matches!(mode, TrayMode::All) {
-        update_tray_all_cores(app, state, snap, style, is_f, unit);
+    let d = decide(snap);
+    let shown = d.primary_value.map(|c| unit_convert(c as f64, is_f));
+    // Default (Plain) icon: bare digits, no plate, colored to complement
+    // the taskbar theme. The opt-in Rounded/Badge styles keep a
+    // temperature-colored plate under white digits.
+    let (fg, plate) = match style {
+        sensors::tray::TrayStyle::Plain => (mono_color(), None),
+        _ => ((255, 255, 255), Some((adapt_for_taskbar(d.color_rgb), style))),
+    };
+    let img = number_image(shown, fg, plate);
+
+    let header = match shown {
+        Some(t) => format!("ARMtemp — {t}°{unit}"),
+        None => "ARMtemp — (no sensor)".to_string(),
+    };
+    let tooltip = if settings.tray_tooltip_all_cores {
+        let mut lines = vec![header];
+        lines.extend(core_tooltip_lines(snap));
+        lines.join("\n")
     } else {
-        // Leaving (or never entering) "All cores" mode: tear down any
-        // leftover per-core extras from a previous mode switch first.
-        teardown_extra_trays(app, state);
-
-        let d = decide(snap, mode);
-        let shown = d.primary_value.map(|c| unit_convert(c as f64, is_f));
-        // Default (Plain) icon: bare digits, no plate, colored to complement
-        // the taskbar theme. The opt-in Rounded/Badge styles keep a
-        // temperature-colored plate under white digits.
-        let (fg, plate) = match style {
-            sensors::tray::TrayStyle::Plain => (mono_color(), None),
-            _ => ((255, 255, 255), Some((adapt_for_taskbar(d.color_rgb), style))),
-        };
-        let img = number_image(shown, fg, plate);
-
-        let header = match shown {
-            Some(t) => format!("ARMtemp — {t}°{unit}"),
-            None => "ARMtemp — (no sensor)".to_string(),
-        };
-        let tooltip = if settings.tray_tooltip_all_cores {
-            let mut lines = vec![header];
-            lines.extend(core_tooltip_lines(snap, is_f, unit));
-            lines.join("\n")
-        } else {
-            header
-        };
-        set_tray_icon(app, "main-tray", img, &tooltip);
-    }
+        header
+    };
+    set_tray_icon(app, "main-tray", img, &tooltip);
 
     update_taskbar_overlay(app, snap, settings, is_f);
-}
-
-/// "All cores" mode: Core #0 drives the main tray icon; cores 1..N each get
-/// their own extra icon (lazily created, ids tracked in `extra_trays` so a
-/// later mode switch can tear them down). Every icon's number is colored by
-/// ITS OWN temperature and all icons share the same right-click ARMtemp menu
-/// (menu-click handling is a single global listener registered once in
-/// `setup()` — see the comment there — so attaching the shared `Menu` here is
-/// enough; no per-icon MENU handler is needed or wanted). Tray-icon CLICK
-/// events are per-icon (unlike menu events), so each extra icon gets its own
-/// `on_tray_icon_event` to restore the main window on left-click.
-fn update_tray_all_cores(
-    app: &tauri::AppHandle,
-    state: &AppState,
-    snap: &SensorSnapshot,
-    style: sensors::tray::TrayStyle,
-    is_f: bool,
-    unit: &str,
-) {
-    let mut extras = state.extra_trays.lock().unwrap_or_else(|e| e.into_inner());
-
-    for (i, c) in snap.cores.iter().enumerate() {
-        let id = if i == 0 { "main-tray".to_string() } else { format!("armtemp-core-{i}") };
-
-        if i > 0 && !extras.contains(&id) {
-            match TrayIconBuilder::with_id(id.clone())
-                .menu(&state.tray_menu)
-                .show_menu_on_left_click(false)
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
-                        restore_main_window(tray.app_handle());
-                    }
-                })
-                .build(app)
-            {
-                Ok(_) => extras.push(id.clone()),
-                Err(e) => eprintln!("[armtemp] failed to create tray '{id}': {e}"),
-            }
-        }
-
-        let val = c.temp_c.map(|v| unit_convert(v, is_f));
-        let (fg, plate) = match style {
-            sensors::tray::TrayStyle::Plain => (
-                c.temp_c
-                    .map(|t| adapt_for_taskbar(sensors::tray::temp_color(t, snap.tjmax_c)))
-                    .unwrap_or_else(mono_color),
-                None,
-            ),
-            _ => {
-                let color = c
-                    .temp_c
-                    .map(|t| sensors::tray::temp_color(t, snap.tjmax_c))
-                    .unwrap_or((140, 140, 140));
-                ((255, 255, 255), Some((adapt_for_taskbar(color), style)))
-            }
-        };
-        let img = number_image(val, fg, plate);
-        let tooltip = match c.temp_c {
-            Some(t) => format!("ARMtemp — Core #{}: {}°{unit}", c.index, unit_convert(t, is_f)),
-            None => format!("ARMtemp — Core #{}: (no sensor)", c.index),
-        };
-        set_tray_icon(app, &id, img, &tooltip);
-    }
-
-    // Defensive: if the core count ever shrinks, drop extras beyond it.
-    let keep = snap.cores.len().saturating_sub(1);
-    if extras.len() > keep {
-        for id in extras.split_off(keep) {
-            app.remove_tray_by_id(&id);
-        }
-    }
-}
-
-/// Remove every per-core extra tray icon (used when leaving "All cores" mode).
-fn teardown_extra_trays(app: &tauri::AppHandle, state: &AppState) {
-    let mut extras = state.extra_trays.lock().unwrap_or_else(|e| e.into_inner());
-    for id in extras.drain(..) {
-        app.remove_tray_by_id(&id);
-    }
 }
 
 /// Windows taskbar overlay badge — same native-font renderer as the tray,
@@ -521,10 +396,8 @@ fn update_taskbar_overlay(app: &tauri::AppHandle, snap: &SensorSnapshot, setting
     #[cfg(target_os = "windows")]
     if let Some(w) = app.get_webview_window("main") {
         if settings.taskbar_on {
-            let (val_c, temp_color) = match settings.taskbar_mode() {
-                TaskbarMode::Average => (snap.average_c, snap.average_c.map(|v| sensors::tray::temp_color(v, snap.tjmax_c))),
-                TaskbarMode::PerCore => (snap.package_c, snap.package_c.map(|v| sensors::tray::temp_color(v, snap.tjmax_c))),
-            };
+            let val_c = snap.package_c;
+            let temp_color = snap.package_c.map(|v| sensors::tray::temp_color(v, snap.tjmax_c));
             let color = if settings.taskbar_accent { ACCENT_RGB } else { temp_color.unwrap_or((140, 140, 140)) };
             let val = val_c.map(|v| unit_convert(v, is_f));
             let img = number_image(val, (255, 255, 255), Some((color, sensors::tray::TrayStyle::Badge)));
@@ -605,7 +478,7 @@ fn start_poll_loop(app: tauri::AppHandle, state: Arc<AppState>) {
                     }
                 }
 
-                update_tray(&app, &state, &snap, &settings);
+                update_tray(&app, &snap, &settings);
                 *state.latest.lock().await = Some(snap.clone());
                 let _ = app.emit("sensor-update", snap);
             }
@@ -634,18 +507,6 @@ pub fn run() {
             let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let mini = MenuItem::with_id(app, "mini", "Mini-mode", true, None::<&str>)?;
 
-            // Tray-mode submenu (Average is the default per user spec).
-            let mode_h = MenuItem::with_id(app, "mode_h", "Highest core", true, None::<&str>)?;
-            let mode_a = CheckMenuItem::with_id(app, "mode_a", "Average", true, true, None::<&str>)?;
-            let mode_all = MenuItem::with_id(app, "mode_all", "All cores", true, None::<&str>)?;
-            let mode_pkg = MenuItem::with_id(app, "mode_pkg", "Package", true, None::<&str>)?;
-            let mode_menu = Submenu::with_items(
-                app,
-                "Tray mode",
-                true,
-                &[&mode_h, &mode_a, &mode_all, &mode_pkg],
-            )?;
-
             // Unit submenu (°C / °F quick toggle — also in Settings → General).
             let unit_c = CheckMenuItem::with_id(app, "unit_c", "°C", true, true, None::<&str>)?;
             let unit_f = MenuItem::with_id(app, "unit_f", "°F", true, None::<&str>)?;
@@ -662,7 +523,6 @@ pub fn run() {
                     &mini,
                     &settings_item,
                     &sep1,
-                    &mode_menu,
                     &unit_menu,
                     &sep2,
                     &refresh,
@@ -681,14 +541,6 @@ pub fn run() {
                         restore_main_window(tray.app_handle());
                     }
                 })
-                // This listener is registered globally (see tauri's
-                // `shared_app_impl!` — `TrayIconBuilder::on_menu_event` and
-                // `AppHandle::on_menu_event` both push into the SAME
-                // app-wide listener list), so it already fires for menu
-                // clicks from the "All cores" mode's extra per-core tray
-                // icons too. Do NOT also call `.on_menu_event()` on those —
-                // that would register this closure a second time and fire
-                // every action (including "exit") once per registered tray.
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => restore_main_window(app),
                     "settings" => {
@@ -700,27 +552,6 @@ pub fn run() {
                     "mini" => {
                         if let Some(w) = app.get_webview_window("main") {
                             let _ = w.emit("toggle-mini", ());
-                        }
-                    }
-                    // Tray-mode quick switches — tell the frontend to persist + apply.
-                    "mode_h" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.emit("set-tray-mode", "highest");
-                        }
-                    }
-                    "mode_a" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.emit("set-tray-mode", "average");
-                        }
-                    }
-                    "mode_all" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.emit("set-tray-mode", "all");
-                        }
-                    }
-                    "mode_pkg" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.emit("set-tray-mode", "package");
                         }
                     }
                     // Unit quick toggle.
@@ -758,10 +589,7 @@ pub fn run() {
                 tick: Mutex::new(0),
                 settings: Mutex::new(AppSettings::default()),
                 overheat_armed: Mutex::new(true),
-                mode_a_item: mode_a.clone(),
                 unit_c_item: unit_c.clone(),
-                tray_menu: menu.clone(),
-                extra_trays: std::sync::Mutex::new(Vec::new()),
             });
             app.manage(state.clone());
 

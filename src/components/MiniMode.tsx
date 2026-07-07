@@ -1,5 +1,5 @@
 import { CoreReading, SensorSnapshot } from "../app/types";
-import { formatTemp, tempColor } from "../app/theme";
+import { formatLoad, formatTemp, tempColor } from "../app/theme";
 
 interface Props {
   snap: SensorSnapshot | null;
@@ -12,10 +12,9 @@ function meanOf(cores: CoreReading[], pick: (c: CoreReading) => number | null): 
   return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
 }
 
-/// One averaged value cell, colored by its own value the same way TempTable's
-/// per-core cells are — mini mode is the normal table's math, just collapsed
-/// to a single row across all cores instead of one row per core.
-function AvgCell({ v, tjmax, unit, colorCode }: { v: number | null; tjmax: number; unit: "C" | "F"; colorCode: boolean }) {
+/// One temperature cell, colored by its own value (matches TempTable's CPU
+/// Temp row).
+function TempCell({ v, tjmax, unit, colorCode }: { v: number | null; tjmax: number; unit: "C" | "F"; colorCode: boolean }) {
   const color = v !== null && colorCode ? tempColor(v, tjmax) : undefined;
   return (
     <div className="tcell sunken mono" style={color ? { color } : undefined}>
@@ -24,8 +23,13 @@ function AvgCell({ v, tjmax, unit, colorCode }: { v: number | null; tjmax: numbe
   );
 }
 
-// Mini mode: the normal window, stripped down to the processor name and a
-// single row averaging every core's current/min/max/avg temp and load — no
+/// One plain (uncolored) load cell.
+function LoadCell({ v }: { v: number | null }) {
+  return <div className="tcell sunken mono">{formatLoad(v)}</div>;
+}
+
+// Mini mode: the normal window, stripped down to the processor name, the
+// single honest CPU temperature, and an averaged per-core Load row — no
 // Power/Tj.Max rows, no status bar. Rendered inside the same window-shell as
 // normal mode (native decorations, auto-fit sizing); toggling back to full
 // mode is the same "Toggle Mini Mode" menu item that entered it.
@@ -34,12 +38,15 @@ export function MiniMode({ snap, unit, colorCode }: Props) {
   const tjmax = snap?.tjmax_c ?? 100;
   const modelStr = snap ? [snap.chip_name, snap.chip_model].filter(Boolean).join(" ") : "Detecting…";
 
-  const avgTemp = snap?.average_c ?? null;
-  const avgMin = meanOf(cores, (c) => c.min_c);
-  const avgMax = meanOf(cores, (c) => c.max_c);
-  const avgAvg = meanOf(cores, (c) => c.avg_c);
+  const cpuTemp = snap?.package_c ?? null;
+  const cpuMin = snap?.package_min_c ?? null;
+  const cpuMax = snap?.package_max_c ?? null;
+  const cpuAvg = snap?.package_avg_c ?? null;
+
   const avgLoad = meanOf(cores, (c) => c.load);
-  const loadStr = avgLoad !== null ? `${Math.round(avgLoad)} %` : "—";
+  const avgLoadMin = meanOf(cores, (c) => c.load_min);
+  const avgLoadMax = meanOf(cores, (c) => c.load_max);
+  const avgLoadAvg = meanOf(cores, (c) => c.load_avg);
 
   return (
     <div className="mini-root">
@@ -49,19 +56,24 @@ export function MiniMode({ snap, unit, colorCode }: Props) {
         <div className="temp-table">
           <div className="temp-row">
             <div className="core-cell" />
-            <div className="thead">Temp</div>
+            <div className="thead">Cur.</div>
             <div className="thead">Min.</div>
             <div className="thead">Max.</div>
             <div className="thead">Avg.</div>
-            <div className="thead">Load</div>
+          </div>
+          <div className="temp-row">
+            <div className="core-cell">CPU:</div>
+            <TempCell v={cpuTemp} tjmax={tjmax} unit={unit} colorCode={colorCode} />
+            <TempCell v={cpuMin} tjmax={tjmax} unit={unit} colorCode={colorCode} />
+            <TempCell v={cpuMax} tjmax={tjmax} unit={unit} colorCode={colorCode} />
+            <TempCell v={cpuAvg} tjmax={tjmax} unit={unit} colorCode={colorCode} />
           </div>
           <div className="temp-row">
             <div className="core-cell">All cores:</div>
-            <AvgCell v={avgTemp} tjmax={tjmax} unit={unit} colorCode={colorCode} />
-            <AvgCell v={avgMin} tjmax={tjmax} unit={unit} colorCode={colorCode} />
-            <AvgCell v={avgMax} tjmax={tjmax} unit={unit} colorCode={colorCode} />
-            <AvgCell v={avgAvg} tjmax={tjmax} unit={unit} colorCode={colorCode} />
-            <div className="tcell sunken mono">{loadStr}</div>
+            <LoadCell v={avgLoad} />
+            <LoadCell v={avgLoadMin} />
+            <LoadCell v={avgLoadMax} />
+            <LoadCell v={avgLoadAvg} />
           </div>
         </div>
       </div>

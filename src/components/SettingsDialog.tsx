@@ -1,12 +1,5 @@
 import { useRef, useState } from "react";
-import {
-  AppSettings,
-  UiStyle,
-  TrayMode,
-  TrayStyle,
-  ThemeChoice,
-  TaskbarMode,
-} from "../app/types";
+import { AppSettings, UiStyle, TrayStyle, ThemeChoice } from "../app/types";
 
 type Tab = "general" | "display" | "notif" | "taskbar";
 
@@ -100,32 +93,6 @@ function Check({
   return (
     <label className="chk-row">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span>{label}</span>
-    </label>
-  );
-}
-
-function Radio<T extends string>({
-  name,
-  value,
-  current,
-  label,
-  onChange,
-}: {
-  name: string;
-  value: T;
-  current: T;
-  label: string;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <label className="chk-row">
-      <input
-        type="radio"
-        name={name}
-        checked={current === value}
-        onChange={() => onChange(value)}
-      />
       <span>{label}</span>
     </label>
   );
@@ -312,39 +279,9 @@ function NotifTab({
           onChange={(v) => update({ trayOn: v })}
         />
         <Check
-          label="Show all core temperatures in the tooltip"
+          label="Show all core loads in the tooltip"
           checked={settings.trayTooltipAllCores}
           onChange={(v) => update({ trayTooltipAllCores: v })}
-        />
-      </Group>
-      <Group legend="Icon displays">
-        <Radio<TrayMode>
-          name="trayMode"
-          value="highest"
-          current={settings.trayMode}
-          label="Highest core temperature"
-          onChange={(v) => update({ trayMode: v })}
-        />
-        <Radio<TrayMode>
-          name="trayMode"
-          value="average"
-          current={settings.trayMode}
-          label="Average of all cores"
-          onChange={(v) => update({ trayMode: v })}
-        />
-        <Radio<TrayMode>
-          name="trayMode"
-          value="all"
-          current={settings.trayMode}
-          label="All cores (one icon per core)"
-          onChange={(v) => update({ trayMode: v })}
-        />
-        <Radio<TrayMode>
-          name="trayMode"
-          value="package"
-          current={settings.trayMode}
-          label="Package temperature"
-          onChange={(v) => update({ trayMode: v })}
         />
       </Group>
       <Group legend="Icon style">
@@ -382,22 +319,6 @@ function TaskbarTab({
           label="Use accent color background"
           checked={settings.taskbarAccent}
           onChange={(v) => update({ taskbarAccent: v })}
-        />
-      </Group>
-      <Group legend="Button displays">
-        <Radio<TaskbarMode>
-          name="taskbarMode"
-          value="per-core"
-          current={settings.taskbarMode}
-          label="Hottest core temperature"
-          onChange={(v) => update({ taskbarMode: v })}
-        />
-        <Radio<TaskbarMode>
-          name="taskbarMode"
-          value="average"
-          current={settings.taskbarMode}
-          label="Average of all cores"
-          onChange={(v) => update({ taskbarMode: v })}
         />
       </Group>
     </>

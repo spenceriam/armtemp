@@ -10,14 +10,16 @@ interface Props {
 
 const HISTORY_LEN = 48;
 
-// Dashboard layout: a large package-temperature card with a rolling sparkline,
-// followed by the per-core cards grid. History is kept in a ref-backed state
-// ring buffer of real package temps.
+// Dashboard layout: a large CPU-temperature card with a rolling sparkline,
+// followed by the per-core load cards grid. Snapdragon X exposes no per-core
+// temperature sensor — this card shows the single honest CPU temperature
+// (the hottest valid thermal zone). History is kept in a ref-backed state
+// ring buffer of real readings.
 export function DashboardView({ snap, unit }: Props) {
   const [history, setHistory] = useState<number[]>([]);
   const tickSeen = useRef<number>(-1);
 
-  // Append each new real package reading to the rolling history.
+  // Append each new real CPU-temperature reading to the rolling history.
   useEffect(() => {
     if (!snap) return;
     if (snap.tick === tickSeen.current) return; // dedupe
@@ -27,38 +29,29 @@ export function DashboardView({ snap, unit }: Props) {
     }
   }, [snap]);
 
-  const pkg = snap?.package_c ?? null;
-  const pkgColor = pkg !== null ? tempColor(pkg, snap?.tjmax_c ?? 100) : "var(--text-3)";
-  const avg = snap?.average_c ?? null;
+  const cpu = snap?.package_c ?? null;
+  const cpuColor = cpu !== null ? tempColor(cpu, snap?.tjmax_c ?? 100) : "var(--text-3)";
+  const avg = snap?.package_avg_c ?? null;
 
   return (
     <>
       <div className="card graph-card">
         <div className="graph-head">
           <div>
-            <div className="graph-label">Package temperature</div>
-            <div className="graph-temp" style={{ color: pkgColor }}>
-              {formatTemp(pkg, unit)}
+            <div className="graph-label">CPU temperature</div>
+            <div className="graph-temp" style={{ color: cpuColor }}>
+              {formatTemp(cpu, unit)}
             </div>
           </div>
           <div className="graph-side">
             <div>
               Avg <span>{formatTemp(avg, unit)}</span>
             </div>
-            {snap?.power_w != null && (
-              <div>
-                Power <span>{Math.round(snap.power_w)} W</span>
-              </div>
-            )}
           </div>
         </div>
-        <Sparkline history={history} color={pkgColor} tjmax={snap?.tjmax_c ?? 100} />
+        <Sparkline history={history} color={cpuColor} tjmax={snap?.tjmax_c ?? 100} />
       </div>
-      <CardsView
-        cores={snap?.cores ?? []}
-        tjmax={snap?.tjmax_c ?? 100}
-        unit={unit}
-      />
+      <CardsView cores={snap?.cores ?? []} />
     </>
   );
 }

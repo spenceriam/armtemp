@@ -2,7 +2,8 @@
 //! reference table ported from the Claude design's `chips` array. It is used to
 //! LABEL detected hardware (name, model, TjMax, cluster layout for P/E core
 //! coloring) — never to fabricate readings. The actual CPU is detected at
-//! runtime from Win32_Processor and matched against these profiles.
+//! runtime from the registry + `GetSystemInfo` (see `sensors/pdh.rs`) and
+//! matched against these profiles.
 
 use crate::sensors::types::CoreKind;
 

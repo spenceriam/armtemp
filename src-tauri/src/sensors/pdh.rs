@@ -290,10 +290,20 @@ fn kind_for_core(profile: &ChipProfile, idx: u32) -> CoreKind {
     CoreKind::Performance
 }
 
-/// Per-core running stats across ticks: (min, max, sum, sample_count).
+/// Per-core running LOAD stats across ticks: (min, max, sum, sample_count).
+/// Load is genuinely per-core (unlike temperature — see `TempStats` below).
 type CoreStats = HashMap<u32, (f64, f64, f64, u64)>;
 
-fn build_snapshot(q: &Query, profile: &ChipProfile, stats: &mut CoreStats) -> SensorSnapshot {
+/// Running session stats for the single CPU temperature (`package_c`):
+/// (min, max, sum, sample_count). `None` until the first valid reading.
+type TempStats = Option<(f64, f64, f64, u64)>;
+
+fn build_snapshot(
+    q: &Query,
+    profile: &ChipProfile,
+    stats: &mut CoreStats,
+    temp_stats: &mut TempStats,
+) -> SensorSnapshot {
     unsafe {
         let _ = PdhCollectQueryData(q.hquery);
     }
@@ -323,12 +333,29 @@ fn build_snapshot(q: &Query, profile: &ChipProfile, stats: &mut CoreStats) -> Se
             throttled,
         });
     }
+    // The single honest CPU temperature: the hottest valid zone. There is no
+    // true per-core temperature sensor on this firmware (see SENSORS.md §5) —
+    // per-core rows carry LOAD instead, which genuinely is per-core.
     let package_c = zones
         .iter()
         .map(|z| z.temp_c)
         .fold(None::<f64>, |acc, t| Some(acc.map_or(t, |a| a.max(t))));
 
-    // Per-core load, keyed by the parsed core index.
+    // Session running stats (min/max/avg) for that single CPU temperature.
+    if let Some(t) = package_c {
+        let entry = temp_stats.get_or_insert((t, t, 0.0, 0));
+        entry.0 = entry.0.min(t);
+        entry.1 = entry.1.max(t);
+        entry.2 += t;
+        entry.3 += 1;
+    }
+    let (package_min_c, package_max_c, package_avg_c) = match temp_stats {
+        Some(s) => (Some(s.0), Some(s.1), Some(s.2 / s.3 as f64)),
+        None => (None, None, None),
+    };
+
+    // Per-core load, keyed by the parsed core index. This IS genuinely
+    // per-core (unlike temperature).
     let mut loads: HashMap<u32, f64> = HashMap::new();
     for (name, value) in read_array(q.core_load) {
         if let Some(idx) = parse_core_index(&name) {
@@ -339,41 +366,26 @@ fn build_snapshot(q: &Query, profile: &ChipProfile, stats: &mut CoreStats) -> Se
     let logical = logical_core_count();
     let cores_count = profile.total_cores().max(logical);
 
-    // Zone -> core mapping: hottest zone first (same "core cluster" proxy as
-    // the PowerShell backend — see SENSORS.md §5, no true per-core sensor).
-    let mut sorted_zone_temps: Vec<f64> = zones.iter().map(|z| z.temp_c).collect();
-    sorted_zone_temps.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
-    let coolest = sorted_zone_temps.last().copied();
-
     let mut cores_out: Vec<CoreReading> = Vec::with_capacity(logical as usize);
-    let mut temp_vals: Vec<f64> = Vec::new();
     for i in 0..logical {
-        let temp_c = sorted_zone_temps.get(i as usize).copied().or(coolest);
-        if let Some(t) = temp_c {
-            let entry = stats.entry(i).or_insert((t, t, 0.0, 0));
-            entry.0 = entry.0.min(t);
-            entry.1 = entry.1.max(t);
-            entry.2 += t;
+        let load = loads.get(&i).copied();
+        if let Some(l) = load {
+            let entry = stats.entry(i).or_insert((l, l, 0.0, 0));
+            entry.0 = entry.0.min(l);
+            entry.1 = entry.1.max(l);
+            entry.2 += l;
             entry.3 += 1;
-            temp_vals.push(t);
         }
         let s = stats.get(&i);
         cores_out.push(CoreReading {
             index: i,
             kind: kind_for_core(profile, i),
-            load: loads.get(&i).copied(),
-            temp_c,
-            min_c: s.map(|s| s.0),
-            max_c: s.map(|s| s.1),
-            avg_c: s.map(|s| s.2 / s.3 as f64),
+            load,
+            load_min: s.map(|s| s.0),
+            load_max: s.map(|s| s.1),
+            load_avg: s.map(|s| s.2 / s.3 as f64),
         });
     }
-
-    let average_c = if temp_vals.is_empty() {
-        None
-    } else {
-        Some(temp_vals.iter().sum::<f64>() / temp_vals.len() as f64)
-    };
 
     // Live frequency: genuinely varies with load (unlike the static
     // Win32_Processor.CurrentClockSpeed this backend replaces). `max_clock_mhz`
@@ -405,7 +417,9 @@ fn build_snapshot(q: &Query, profile: &ChipProfile, stats: &mut CoreStats) -> Se
         tdp_w: if profile.tdp_w > 0 { Some(profile.tdp_w) } else { None },
         tjmax_c: profile.tjmax_c,
         package_c,
-        average_c,
+        package_min_c,
+        package_max_c,
+        package_avg_c,
         zones,
         cores: cores_out,
         clock_mhz,
@@ -420,6 +434,7 @@ fn build_snapshot(q: &Query, profile: &ChipProfile, stats: &mut CoreStats) -> Se
 fn worker(rx: mpsc::Receiver<Request>) {
     let profile = detect_profile();
     let mut stats: CoreStats = HashMap::new();
+    let mut temp_stats: TempStats = None;
     let mut query: Option<Query> = None;
 
     for req in rx {
@@ -432,7 +447,7 @@ fn worker(rx: mpsc::Receiver<Request>) {
                     query = open_query().ok();
                 }
                 let result = match &query {
-                    Some(q) => Ok(build_snapshot(q, &profile, &mut stats)),
+                    Some(q) => Ok(build_snapshot(q, &profile, &mut stats, &mut temp_stats)),
                     None => Err(anyhow::anyhow!("PDH query not open")),
                 };
                 if result.is_err() {

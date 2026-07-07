@@ -36,7 +36,7 @@ export function AboutDialog({ onClose }: Props) {
             </div>
             <div>
               <div className="about-name">ARMtemp</div>
-              <div className="about-version">Version 0.3.2 · ARM64 build · Tauri</div>
+              <div className="about-version">Version 0.4.0 · ARM64 build · Tauri</div>
               <div className="about-author">Built by Spencer Francisco</div>
               <div className="about-links">
                 <button
@@ -56,6 +56,11 @@ export function AboutDialog({ onClose }: Props) {
                 </button>
               </div>
             </div>
+          </div>
+
+          <div className="about-disclosure">
+            Snapdragon X reports temperature for the processor as a whole, not per
+            individual core.
           </div>
 
           <div className="groupbox dlg-group">

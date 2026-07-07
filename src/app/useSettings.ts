@@ -13,7 +13,6 @@ const STORE_FILE = "settings.json";
 function backendSettings(s: AppSettings) {
   return {
     tempUnit: s.tempUnit,
-    trayMode: s.trayMode,
     trayStyle: s.trayStyle,
     overheatOn: s.overheatOn,
     overheatThreshold: s.overheatThreshold,
@@ -24,7 +23,6 @@ function backendSettings(s: AppSettings) {
     trayOn: s.trayOn,
     trayTooltipAllCores: s.trayTooltipAllCores,
     taskbarOn: s.taskbarOn,
-    taskbarMode: s.taskbarMode,
     taskbarAccent: s.taskbarAccent,
     theme: s.theme,
   };

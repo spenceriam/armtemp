@@ -102,3 +102,10 @@ export function formatTempNum(c: number | null | undefined, unit: "C" | "F"): st
   if (c === null || c === undefined) return "—";
   return unit === "C" ? `${Math.round(c)}` : `${Math.round((c * 9) / 5 + 32)}`;
 }
+
+/// Format a per-core load percentage (0..=100). Always real; `null` when no
+/// sample was available this tick.
+export function formatLoad(p: number | null | undefined): string {
+  if (p === null || p === undefined) return "—";
+  return `${Math.round(p)} %`;
+}

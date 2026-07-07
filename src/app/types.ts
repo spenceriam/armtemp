@@ -6,10 +6,9 @@ export interface CoreReading {
   index: number;
   kind: CoreKind;
   load: number | null;
-  temp_c: number | null;
-  min_c: number | null;
-  max_c: number | null;
-  avg_c: number | null;
+  load_min: number | null;
+  load_max: number | null;
+  load_avg: number | null;
 }
 
 export interface ZoneReading {
@@ -27,7 +26,9 @@ export interface SensorSnapshot {
   tdp_w: number | null;
   tjmax_c: number;
   package_c: number | null;
-  average_c: number | null;
+  package_min_c: number | null;
+  package_max_c: number | null;
+  package_avg_c: number | null;
   zones: ZoneReading[];
   cores: CoreReading[];
   clock_mhz: number | null;
@@ -40,11 +41,9 @@ export interface SensorSnapshot {
 
 export type TempUnit = "C" | "F";
 export type UiStyle = "classic" | "cards" | "dashboard";
-export type TrayMode = "all" | "highest" | "average" | "package";
 export type TrayStyle = "rounded" | "badge" | "plain";
 export type OverheatAction = "notify" | "sleep" | "shutdown";
 export type ThemeChoice = "system" | "dark" | "light";
-export type TaskbarMode = "per-core" | "average";
 
 export interface AppSettings {
   // General
@@ -63,12 +62,10 @@ export interface AppSettings {
   colorCodeTemps: boolean;
   // Notification Area
   trayOn: boolean;
-  trayMode: TrayMode;
   trayStyle: TrayStyle;
   trayTooltipAllCores: boolean;
   // Windows Taskbar
   taskbarOn: boolean;
-  taskbarMode: TaskbarMode;
   taskbarAccent: boolean;
   // Overheat
   overheatOn: boolean;
@@ -91,14 +88,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   zoom: 100,
   statusBarOn: true,
   colorCodeTemps: true,
-  // Notification Area — default tray mode = AVERAGE (per user spec)
+  // Notification Area
   trayOn: true,
-  trayMode: "average",
   trayStyle: "plain",
   trayTooltipAllCores: true,
   // Windows Taskbar
   taskbarOn: true,
-  taskbarMode: "per-core",
   taskbarAccent: true,
   // Overheat
   overheatOn: false,

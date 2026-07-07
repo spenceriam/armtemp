@@ -123,7 +123,7 @@ Users can always override AI agent version decisions:
 - **Backend**: Rust (Tauri 2), native ARM64 binary
 - **Sensors**: Real telemetry via the native Windows PDH API (ACPI thermal zones, per-core load, live CPU frequency); CPU identity via the registry + `GetSystemInfo`
 - **State Management**: React hooks (useState, useEffect, useCallback)
-- **Tray**: Exactly one tray icon by default (do NOT re-add the `app.trayIcon` block to `tauri.conf.json` — it duplicates the runtime-built icon). The number is rendered with the native system font via GDI (`sensors/tray_render.rs`, Windows-only, behind a small `tray_icon_size()`/`render_number_rgba()` seam so a macOS menu-bar or Linux tray backend can implement the same two functions later). "All cores" mode is the one exception: it shows one extra tray icon per core beyond #0, each colored by its own temperature, all sharing the same right-click menu; Windows does not guarantee notification-area icon ordering.
+- **Tray**: Exactly one tray icon, always (do NOT re-add the `app.trayIcon` block to `tauri.conf.json` — it duplicates the runtime-built icon). It always shows the single honest CPU temperature — there is no per-core sensor to drive a per-core/mode tray menu. The number is rendered with the native system font via GDI (`sensors/tray_render.rs`, Windows-only, behind a small `tray_icon_size()`/`render_number_rgba()` seam so a macOS menu-bar or Linux tray backend can implement the same two functions later).
 - **Settings Persistence**: Tauri store plugin (JSON in app data folder)
 ## Key directories
 - `src/app/` - TypeScript types, theme tokens, hooks (useSettings, useSensors)
@@ -135,7 +135,7 @@ Users can always override AI agent version decisions:
 - **All telemetry must be REAL.** No simulated, random, or fallback values anywhere.
 - Where a real sensor source is missing (e.g. per-core voltage, true per-core temps), show `—` honestly. Never fabricate a number.
 - The working data source on Snapdragon X is the `Thermal Zone Information` PDH counter object (ACPI thermal zones). See `SENSORS.md`.
-- Per-core temps are real *zone* readings mapped to cores (Core #0 = hottest zone), NOT true per-core sensors. Document this in the About tab / README; do not imply otherwise.
+- There is no true per-core temperature sensor on this firmware. ARMtemp does NOT invent per-core temperatures by mapping zones to cores — it shows one honest CPU temperature (the hottest valid zone, with session Min/Max/Avg) plus genuinely per-core LOAD. This is documented in the About tab / README; do not imply per-core temperature sensing anywhere in the UI.
 - Package power is genuinely unavailable from userspace on this firmware (confirmed empty PDH/WMI power counter) — show `—`, do not wire up a fake value.
 - Read counters natively via PDH (`sensors/pdh.rs`). Do NOT reintroduce the `wmi` crate's COM/`IWbemServices` query path — it fails with `WBEM_E_NOT_FOUND` under Tauri (see `SENSORS.md` §7 for that history).
 ## Main window layout structure
@@ -143,8 +143,8 @@ The application displays all sensor information in a single window matching Core
 1. **Native title bar** — the OS draws it (icon, title, minimize/close); the window is decorated and opaque (no custom chrome, no transparency/blur). Dark/light native chrome follows the app theme via `getCurrentWindow().setTheme()`.
 2. **Menu Bar** (`src/components/MenuBar.tsx`) — File (Exit) / Options (Settings, Overheat protection, Toggle Mini Mode, Always on top) / Tools (Refresh sensors) / Help (About ARMtemp). Rendered as themed HTML dropdowns (a native HMENU doesn't follow dark/light mode on Windows) styled to look like real Win32 menus. No unit toggle — Fahrenheit lives in Settings → Display. Launch flags `--settings` / `--overheat` / `--about` deep-link the dialogs.
 3. **Select CPU** row (combo + `[N] Core(s) [N] Thread(s)` sunken count boxes) + **Processor Information** group box (Win32 etched border, sunken read-only value fields): Model / Platform / Frequency / CPUID full rows; `Boost | Lithography` and `Throttle | TDP` pairs. VID and Revision are intentionally omitted (permanently unavailable on Snapdragon X); Throttle is the live ACPI passive-limit status (red "Yes" while the firmware throttles).
-4. **Temperature Readings** group box — Tj. Max row, per-core rows (Core # | Temp. | Min. | Max. | Load) with **colored temperature text** (no dots, no progress bars — the color itself carries the meaning), Power row.
-5. **Status Bar** — thin native strip with CPU Temp / Avg / Low / High.
+4. **Temperature Readings** group box — Tj. Max row, one **CPU Temp** row (Cur. | Min. | Max. | Avg., **colored temperature text** — the app's single honest CPU temperature), then per-core rows (Core # | Load | Min. | Max. | Avg., plain text — genuinely per-core).
+5. **Status Bar** — thin native strip with CPU Temp / Low / High (session, since app start).
 6. **Mini-mode** drops native decorations at runtime (`setDecorations(false)` + `setSize()`) for a compact always-on-top box, and restores them on exit — matches Core Temp's mini mode.
 ## Development workflow
 1. **ALWAYS** create a new branch for each issue: `git checkout -b issue-{number}-description`
@@ -181,7 +181,7 @@ The application displays all sensor information in a single window matching Core
 ## Testing
 - Manual testing required for sensor data (real hardware only — runs on Snapdragon X machines)
 - Test temperature unit toggle (°C/°F) updates everywhere (table, status bar, tray)
-- Test tray icon modes (average, highest, all cores, package)
+- Test the tray icon shows the CPU temperature and updates live
 - Test settings persistence across restart
 - Test close-to-tray behavior
 - Test overheat protection notifications

@@ -8,9 +8,10 @@
 
 use serde::{Deserialize, Serialize};
 
-/// One core's live snapshot. Temperature may be `None` when the firmware
-/// exposes no per-core thermal surface (the common case on Snapdragon X);
-/// load is always available via the perf counter.
+/// One core's live snapshot. Snapdragon X exposes no per-core thermal
+/// surface, so temperature is not tracked per core (see `SensorSnapshot`'s
+/// `package_c` for the one real CPU temperature). Load is genuinely
+/// per-core and always available via the perf counter.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CoreReading {
     /// Logical core index (0-based).
@@ -19,14 +20,12 @@ pub struct CoreReading {
     pub kind: CoreKind,
     /// Utilization 0..=100, always real (perf counter).
     pub load: Option<f64>,
-    /// Temperature in degrees Celsius. `None` if no real per-core source.
-    pub temp_c: Option<f64>,
-    /// Running minimum temp seen since start (real only).
-    pub min_c: Option<f64>,
-    /// Running maximum temp seen since start (real only).
-    pub max_c: Option<f64>,
-    /// Running session average of the real samples seen since start.
-    pub avg_c: Option<f64>,
+    /// Running minimum load seen since start (real only).
+    pub load_min: Option<f64>,
+    /// Running maximum load seen since start (real only).
+    pub load_max: Option<f64>,
+    /// Running session average load since start.
+    pub load_avg: Option<f64>,
 }
 
 /// Core classification. Snapdragon X Prime/Performance cores map to `Performance`;
@@ -70,26 +69,34 @@ pub struct SensorSnapshot {
     /// Thermal junction max in °C from the chip profile (e.g. 100). Used for
     /// the temp-color scale and overheat threshold defaults.
     pub tjmax_c: f64,
-    /// Package temperature (°C). The hottest valid CPU-area zone; `None` if no
+    /// CPU temperature (°C), current reading — the hottest valid CPU-area
+    /// zone. This IS the app's single honest "CPU temperature"; `None` if no
     /// valid zone exists this tick.
     pub package_c: Option<f64>,
-    /// Average across the per-core temps that ARE real this tick.
-    pub average_c: Option<f64>,
+    /// Running minimum of `package_c` since app start (session, real only).
+    pub package_min_c: Option<f64>,
+    /// Running maximum of `package_c` since app start (session, real only).
+    pub package_max_c: Option<f64>,
+    /// Running session average of `package_c` since app start.
+    pub package_avg_c: Option<f64>,
     /// All valid thermal zones. The UI features the package; the rest are
     /// available for a zones view.
     pub zones: Vec<ZoneReading>,
-    /// Per-core readings (load always real; temp when available).
+    /// Per-core readings (load is genuinely per-core and real; there is no
+    /// per-core temperature on this firmware — see `package_c`).
     pub cores: Vec<CoreReading>,
-    /// Current package clock in MHz (real, from Win32_Processor).
+    /// Current package clock in MHz (real, live PDH counter).
     pub clock_mhz: Option<u32>,
     /// Base clock in MHz from the chip profile (spec label, matches Task
     /// Manager's "Base speed" — not live telemetry).
     pub base_clock_mhz: Option<u32>,
-    /// Boost/max clock in MHz (real, from Win32_Processor).
+    /// Boost/max clock in MHz from the chip profile (spec label — not live
+    /// telemetry).
     pub max_clock_mhz: Option<u32>,
     /// Nominal bus/reference clock in MHz (100 on Snapdragon X; informational).
     pub bus_speed_mhz: Option<u32>,
-    /// Package power in watts (real, from the Power Meter counter when present).
+    /// Package power in watts. Always `None` — confirmed unavailable from
+    /// userspace on this firmware (see SENSORS.md §3).
     pub power_w: Option<f64>,
     /// Monotonic tick counter so the UI can detect stale updates.
     pub tick: u64,
@@ -106,7 +113,9 @@ impl Default for SensorSnapshot {
             tdp_w: None,
             tjmax_c: 100.0,
             package_c: None,
-            average_c: None,
+            package_min_c: None,
+            package_max_c: None,
+            package_avg_c: None,
             zones: Vec::new(),
             cores: Vec::new(),
             clock_mhz: None,

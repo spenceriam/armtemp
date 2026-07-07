@@ -267,13 +267,18 @@ body,
 }
 .temp-row {
   display: grid;
-  /* label column + 5 individual sunken value cells (current/Min/Max/Avg/Load) */
-  grid-template-columns: 76px repeat(5, 1fr);
+  /* label column + 4 individual sunken value cells (Cur./Min./Max./Avg.) */
+  grid-template-columns: 76px repeat(4, 1fr);
   gap: 3px 4px;
   align-items: center;
   padding: 1px 2px;
   font-size: 11px;
   min-height: 21px;
+}
+.temp-divider {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border-2);
 }
 .tcell {
   text-align: center;
@@ -642,6 +647,12 @@ body,
   margin-top: 6px;
   font-size: 12px;
   color: var(--text-2);
+}
+.about-disclosure {
+  margin: -4px 0 12px;
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.4;
 }
 .about-x-link {
   display: inline-flex;

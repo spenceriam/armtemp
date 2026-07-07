@@ -1,7 +1,9 @@
 //! Renders live tray icons from REAL readings. The number shown in the icon is
-//! the genuine current temperature (package / highest / average / per-core per
-//! the user's chosen mode). Mirrors the Claude design's three icon styles and the
-//! green->yellow->orange->red temp color scale.
+//! the single honest CPU temperature (the hottest valid thermal zone —
+//! there is no true per-core sensor on this firmware, so there is no
+//! per-core/average tray mode to choose between). Mirrors the Claude
+//! design's three icon styles and the green->yellow->orange->red temp
+//! color scale.
 
 use crate::sensors::types::{CoreReading, SensorSnapshot, ZoneReading};
 
@@ -13,16 +15,7 @@ pub enum TrayStyle {
     Plain,
 }
 
-/// Tray icon data modes (ported from the design's `trayMode`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TrayMode {
-    All,
-    Highest,
-    Average,
-    Package,
-}
-
-/// Decision: which zone/core temperature(s) feed the icon this tick, and their colors.
+/// Decision: which temperature feeds the icon this tick, and its color.
 pub struct TrayDecision {
     pub primary_value: Option<i32>, // °C rounded, the number drawn on the icon
     pub color_rgb: (u8, u8, u8),
@@ -42,30 +35,12 @@ pub fn temp_color(t: f64, tj: f64) -> (u8, u8, u8) {
     }
 }
 
-/// Choose the value for the tray icon given the mode and the real snapshot.
-pub fn decide(snapshot: &SensorSnapshot, mode: TrayMode) -> TrayDecision {
-    let (val_c, color) = match mode {
-        TrayMode::Package | TrayMode::Highest => {
-            // Highest valid zone == package proxy.
-            let t = snapshot.package_c;
-            (t, t.map(|v| temp_color(v, snapshot.tjmax_c)).unwrap_or(NO_READING_GRAY))
-        }
-        TrayMode::Average => (
-            snapshot.average_c,
-            snapshot
-                .average_c
-                .map(|v| temp_color(v, snapshot.tjmax_c))
-                .unwrap_or(NO_READING_GRAY),
-        ),
-        TrayMode::All => {
-            // For a single icon, "All" still draws the hottest; the per-core
-            // detail is in the flyout/UI. Color by hottest.
-            let t = snapshot.package_c;
-            (t, t.map(|v| temp_color(v, snapshot.tjmax_c)).unwrap_or(NO_READING_GRAY))
-        }
-    };
+/// Choose the value for the tray icon: always the single CPU temperature.
+pub fn decide(snapshot: &SensorSnapshot) -> TrayDecision {
+    let t = snapshot.package_c;
+    let color = t.map(|v| temp_color(v, snapshot.tjmax_c)).unwrap_or(NO_READING_GRAY);
     TrayDecision {
-        primary_value: val_c.map(|v| v.round() as i32),
+        primary_value: t.map(|v| v.round() as i32),
         color_rgb: color,
     }
 }

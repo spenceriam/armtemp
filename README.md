@@ -6,11 +6,11 @@
 
 ![Platform](https://img.shields.io/badge/platform-Windows%20on%20ARM64-0078D4)
 ![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB)
-![Version](https://img.shields.io/badge/version-0.3.2-blue)
+![Version](https://img.shields.io/badge/version-0.4.0-blue)
 
 </div>
 
-ARMtemp reads real on-die thermal sensors and displays package + multi-zone temperatures, per-core utilization, and power — recreating the [Core Temp](https://www.alcpu.com/CoreTemp/) experience for the Snapdragon X family (X1/X1P/X1E, X2/X2P/X2E — Qualcomm Oryon). Built as a small native ARM64 binary (Tauri 2 + Rust + React), with a live system-tray icon, mini mode, and overheat protection.
+ARMtemp reads real ACPI thermal-zone sensors and displays a single honest CPU temperature plus genuinely per-core utilization — recreating the [Core Temp](https://www.alcpu.com/CoreTemp/) experience for the Snapdragon X family (X1/X1P/X1E, X2/X2P/X2E — Qualcomm Oryon). Snapdragon X exposes no per-core temperature sensor, so ARMtemp doesn't pretend to have one: temperature is reported for the CPU as a whole, and per-core rows show real per-core load instead. Built as a small native ARM64 binary (Tauri 2 + Rust + React), with a live system-tray icon, mini mode, and overheat protection.
 
 > This is a from-scratch native app ported from a Claude/Design-Component mockup (`claude-design-output/`), which was a *simulated* Windows-desktop preview. All live data here is **real**; no readings are fabricated. See [`SENSORS.md`](./SENSORS.md) for the full sensor discovery report.
 
@@ -30,16 +30,16 @@ ARMtemp reads real on-die thermal sensors and displays package + multi-zone temp
 
 ## Features
 
-- Real telemetry: package temperature via ACPI thermal zones, per-core load, live CPU speed/identity
+- Real telemetry: one CPU temperature via ACPI thermal zones (with session Min/Max/Avg), genuinely per-core load, live CPU speed/identity
 - 3 UI layouts — Classic, Cards, Dashboard
-- Mini mode — the same window, stripped to the model name and one row averaging every core
-- Live system-tray icon with the current temperature, right-click menu, per-core "all cores" mode
+- Mini mode — the same window, stripped to the model name, the CPU temperature, and an averaged per-core load row
+- Live system-tray icon showing the current CPU temperature, with a right-click menu
 - Overheat protection — notify, sleep, or shut down at a configurable threshold
 - Close-to-tray, start-with-Windows, °C/°F, dark/light theme
 - MSI + NSIS installers that upgrade an existing install in place (see [Updating](#updating))
 
 **Honest limitations (firmware, not by choice):**
-- **Per-core temperatures** aren't exposed by any userspace surface on Snapdragon X. The firmware exposes ~17 valid *zone* temperatures (which ARMtemp shows) plus real per-core *load*; true per-core temps would need a signed kernel driver or private Surface/Qualcomm SMF IOCTLs.
+- **Per-core temperatures** aren't exposed by any userspace surface on Snapdragon X — the firmware exposes ~17 valid *zone* temperatures, not one per core. Rather than guess which zone maps to which core, ARMtemp reports one CPU temperature (the hottest valid zone) and shows genuinely per-core *load* instead. True per-core temps would need a signed kernel driver or private Surface/Qualcomm SMF IOCTLs.
 - **Voltage and package power** aren't exposed; those fields show `—` rather than a fabricated number.
 
 ---
@@ -70,7 +70,7 @@ ARMtemp reads real on-die thermal sensors and displays package + multi-zone temp
 
 Reading temperatures on Snapdragon X under Windows is genuinely hard — the standard WMI classes (`MSAcpi_ThermalZoneTemperature`, `Win32_TemperatureProbe`) return **nothing** on this firmware, and LibreHardwareMonitor has no native Oryon support.
 
-ARMtemp's working data source is the **`Thermal Zone Information`** performance-counter object, which exposes ACPI thermal zones (`\_SB.TZxx`). Sentinels/inactive zones (≤ 0 °C) are filtered out; the rest are converted from Kelvin to °C. The hottest valid zone is reported as the package temperature.
+ARMtemp's working data source is the **`Thermal Zone Information`** performance-counter object, which exposes ACPI thermal zones (`\_SB.TZxx`). Sentinels/inactive zones (≤ 0 °C) are filtered out; the rest are converted from Kelvin to °C. The hottest valid zone is reported as the single CPU temperature — there is no per-core thermal surface on this firmware, so ARMtemp doesn't attribute a temperature to any individual core; per-core rows show real per-core load instead.
 
 **Implementation note:** ARMtemp reads these counters natively via the Windows **PDH** (Performance Data Helper) API (`pdh.dll`) — no subprocess, no COM/WMI. This also sidesteps the failure the Rust `wmi` crate's COM/`IWbemServices` path hit when called from inside a Tauri process (`WBEM_E_NOT_FOUND`; see [`SENSORS.md`](./SENSORS.md) §7 for that history). A dedicated worker thread owns the PDH query handles and collects once per poll tick (~1.5–2s); the same counters also yield a genuinely *live* CPU frequency, unlike `Win32_Processor.CurrentClockSpeed`, which mirrors the static max on this firmware.
 

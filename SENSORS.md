@@ -136,8 +136,10 @@ a plain Win32 API that never touches COM, so it also avoids the `WBEM_E_NOT_FOUN
 failure described in §7.
 
 - **`Thermal Zone Information`** (PDH object) — `Temperature` + `High Precision
-  Temperature` every ~1.5–2 s, filtered to valid zones (T > 250 K), converted to °C.
-  Highest valid zone = package.
+  Temperature` every ~1.5–2 s, filtered to valid zones (T > 273 K, i.e. °C > 0 —
+  `VALID_ZONE_MIN_KELVIN` in `types.rs`), converted to °C. Highest valid zone = the
+  single CPU temperature ARMtemp displays (there is no per-core sensor to report
+  individually).
 - **`Processor Information`** — `% Processor Time` per core (instances named
   `group,core`, e.g. `0,3`) and `Processor Frequency` on `_Total` — a genuinely **live**
   frequency, unlike `Win32_Processor.CurrentClockSpeed` (§1 note below).
