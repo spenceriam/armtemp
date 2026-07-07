@@ -45,8 +45,7 @@ export default function App() {
   // Content-fit window (Core Temp behavior): size the OS window to the
   // shell's rendered rect. The shell has a fixed 564px layout width and
   // natural height (styles.css), so its rect never depends on the window
-  // size — no resize feedback loop — and the zoom transform is included in
-  // the measured rect automatically. Mini mode uses the same shell/effect —
+  // size — no resize feedback loop. Mini mode uses the same shell/effect —
   // it's just a smaller rendered rect, so the window shrinks to match.
   const shellRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -84,7 +83,7 @@ export default function App() {
 
   return (
     <div className="app-root" style={rootStyle}>
-      <div ref={shellRef} className="window-shell" style={{ transform: `scale(${settings.zoom / 100})`, transformOrigin: "top left" }}>
+      <div ref={shellRef} className="window-shell">
         <MenuBar
           alwaysOnTop={settings.alwaysOnTop}
           onOpenSettings={() => setSettingsOpen(true)}

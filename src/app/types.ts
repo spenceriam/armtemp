@@ -57,7 +57,6 @@ export interface AppSettings {
   // Display
   uiStyle: UiStyle;
   theme: ThemeChoice;
-  zoom: 75 | 100 | 125;
   statusBarOn: boolean;
   colorCodeTemps: boolean;
   // Notification Area
@@ -85,7 +84,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // Display
   uiStyle: "classic",
   theme: "dark",
-  zoom: 100,
   statusBarOn: true,
   colorCodeTemps: true,
   // Notification Area

@@ -45,7 +45,7 @@ body,
 /* ---------- window shell ---------- */
 /* Fixed design width + natural (content) height: the OS window is auto-sized
    to this element's rendered rect (see the auto-fit effect in App.tsx), which
-   kills dead space below the status bar and makes zoom resize the window. */
+   kills dead space below the status bar. */
 .window-shell {
   width: 430px;
   /* `.app-root` is a flex column pinned to 100vh; without flex:none the

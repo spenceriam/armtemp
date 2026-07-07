@@ -333,16 +333,18 @@ fn number_image(
     tauri::image::Image::new_owned(rgba, size, size)
 }
 
-/// Per-core LOAD lines for the tray tooltip (load is genuinely per-core;
-/// there is no per-core temperature on this firmware — see `decide()`).
-fn core_tooltip_lines(snap: &SensorSnapshot) -> Vec<String> {
-    snap.cores
-        .iter()
-        .map(|c| {
-            let v = c.load.map(|v| format!("{}%", v.round() as i32));
-            format!("Core #{}: {}", c.index, v.as_deref().unwrap_or("—"))
-        })
-        .collect()
+/// Average per-core LOAD as a single tooltip line (load is genuinely
+/// per-core; there is no per-core temperature on this firmware — see
+/// `decide()`). A one-line-per-core list was tried first but overflows the
+/// OS tooltip's length limit on higher-core-count chips (truncates around
+/// Core #3 on a 12-core X1E); one averaged line always fits.
+fn avg_load_line(snap: &SensorSnapshot) -> Option<String> {
+    let loads: Vec<f64> = snap.cores.iter().filter_map(|c| c.load).collect();
+    if loads.is_empty() {
+        return None;
+    }
+    let avg = loads.iter().sum::<f64>() / loads.len() as f64;
+    Some(format!("Avg load: {}%", avg.round() as i32))
 }
 
 fn set_tray_icon(app: &tauri::AppHandle, id: &str, img: tauri::image::Image<'static>, tooltip: &str) {
@@ -379,9 +381,10 @@ fn update_tray(app: &tauri::AppHandle, snap: &SensorSnapshot, settings: &AppSett
         None => "ARMtemp — (no sensor)".to_string(),
     };
     let tooltip = if settings.tray_tooltip_all_cores {
-        let mut lines = vec![header];
-        lines.extend(core_tooltip_lines(snap));
-        lines.join("\n")
+        match avg_load_line(snap) {
+            Some(load_line) => format!("{header}\n{load_line}"),
+            None => header,
+        }
     } else {
         header
     };

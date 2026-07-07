@@ -248,16 +248,6 @@ function DisplayTab({
           ]}
           onChange={(v) => update({ uiStyle: v })}
         />
-        <SelectRow
-          label="Window size"
-          value={settings.zoom}
-          options={[
-            [75, "75%"],
-            [100, "100%"],
-            [125, "125%"],
-          ]}
-          onChange={(v) => update({ zoom: v as 75 | 100 | 125 })}
-        />
       </Group>
     </>
   );
@@ -279,7 +269,7 @@ function NotifTab({
           onChange={(v) => update({ trayOn: v })}
         />
         <Check
-          label="Show all core loads in the tooltip"
+          label="Show average load in the tooltip"
           checked={settings.trayTooltipAllCores}
           onChange={(v) => update({ trayTooltipAllCores: v })}
         />
