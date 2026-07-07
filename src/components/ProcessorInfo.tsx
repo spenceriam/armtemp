@@ -1,6 +1,5 @@
 import { SensorSnapshot } from "../app/types";
 import { SensorStatus } from "../app/useSensors";
-import { ChipBadge, tierFromName } from "./ChipBadge";
 
 interface Props {
   snap: SensorSnapshot | null;
@@ -27,7 +26,6 @@ export function ProcessorInfo({ snap, status }: Props) {
   return (
     <div className="proc-section">
       <div className="select-cpu">
-        <ChipBadge tier={tierFromName(snap?.chip_name)} size={24} />
         <label>Select CPU:</label>
         <select disabled={!snap}>
           <option>#0 ({snap?.chip_name ?? "…"})</option>

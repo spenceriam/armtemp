@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ChipBadge, tierFromName } from "./ChipBadge";
 
 interface Profile {
   name: string;
@@ -45,7 +44,6 @@ export function ChipsList() {
             title={isDetected ? "Detected on this machine" : "Not detected"}
           >
             <input type="radio" checked={!!isDetected} readOnly />
-            <ChipBadge tier={tierFromName(c.name)} size={18} />
             <span>
               {c.name}
               {isDetected ? " · detected" : ""}{" "}
@@ -59,7 +57,6 @@ export function ChipsList() {
       {profile && !detectedMatch && (
         <label className="chk-row chk-static">
           <input type="radio" checked readOnly />
-          <ChipBadge tier={tierFromName(profile.name)} size={18} />
           <span>
             {profile.name} · detected{" "}
             <span className="chk-sub">
