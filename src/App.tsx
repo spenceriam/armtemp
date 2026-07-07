@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useSettings } from "./app/useSettings";
 import { useSensors } from "./app/useSensors";
 import { themeVars, ACCENT } from "./app/theme";
+import { ISSUES_URL } from "./app/links";
 import { MenuBar } from "./components/MenuBar";
 import { ProcessorInfo } from "./components/ProcessorInfo";
 import { TempTable } from "./components/TempTable";
@@ -89,6 +91,7 @@ export default function App() {
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenOverheat={() => setOverheatOpen(true)}
           onOpenAbout={() => setAboutOpen(true)}
+          onOpenFeedback={() => openUrl(ISSUES_URL).catch(() => {})}
           onToggleMini={() => setMini((m) => !m)}
           onToggleAlwaysOnTop={() => update({ alwaysOnTop: !settings.alwaysOnTop })}
           onRefresh={() => invoke("refresh_now").catch(() => {})}

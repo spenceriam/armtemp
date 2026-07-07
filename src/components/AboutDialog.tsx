@@ -1,12 +1,12 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import appIconUrl from "../assets/app-icon.png?url";
 import { ChipsList } from "./ChipsList";
+import { REPO_URL } from "../app/links";
 
 interface Props {
   onClose: () => void;
 }
 
-const REPO_URL = "https://github.com/spenceriam/armtemp";
 const X_URL = "https://x.com/spencer_i_am";
 const SITE_URL = "https://spencer.build";
 
@@ -36,7 +36,7 @@ export function AboutDialog({ onClose }: Props) {
             </div>
             <div>
               <div className="about-name">ARMtemp</div>
-              <div className="about-version">Version 0.4.1 · ARM64 build · Tauri</div>
+              <div className="about-version">Version 0.4.2 · ARM64 build · Tauri</div>
               <div className="about-author">Built by Spencer Francisco</div>
               <div className="about-links">
                 <button

@@ -5,6 +5,7 @@ interface MenuBarProps {
   onOpenSettings: () => void;
   onOpenOverheat: () => void;
   onOpenAbout: () => void;
+  onOpenFeedback: () => void;
   onToggleMini: () => void;
   onToggleAlwaysOnTop: () => void;
   onRefresh: () => void;
@@ -21,6 +22,7 @@ export function MenuBar({
   onOpenSettings,
   onOpenOverheat,
   onOpenAbout,
+  onOpenFeedback,
   onToggleMini,
   onToggleAlwaysOnTop,
   onRefresh,
@@ -115,6 +117,10 @@ export function MenuBar({
         {topButton("help", "Help")}
         {openMenu === "help" && (
           <div className="menu-drop" role="menu">
+            <button className="menu-entry" role="menuitem" onClick={() => run(onOpenFeedback)}>
+              Feedback
+            </button>
+            <div className="menu-sep" />
             <button className="menu-entry" role="menuitem" onClick={() => run(onOpenAbout)}>
               About ARMtemp
             </button>
