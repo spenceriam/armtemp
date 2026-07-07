@@ -4,7 +4,7 @@
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
-$outDir = 'C:\Users\spenc\GitHub\armtemp\src-tauri\icons'
+$outDir = Join-Path $PSScriptRoot '..\src-tauri\icons'
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
 function New-Bitmap($size) {

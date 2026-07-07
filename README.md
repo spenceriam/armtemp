@@ -12,7 +12,7 @@
 
 ARMtemp reads real ACPI thermal-zone sensors and displays a single honest CPU temperature plus genuinely per-core utilization — recreating the [Core Temp](https://www.alcpu.com/CoreTemp/) experience for the Snapdragon X family (X1/X1P/X1E, X2/X2P/X2E — Qualcomm Oryon). Snapdragon X exposes no per-core temperature sensor, so ARMtemp doesn't pretend to have one: temperature is reported for the CPU as a whole, and per-core rows show real per-core load instead. Built as a small native ARM64 binary (Tauri 2 + Rust + React), with a live system-tray icon, mini mode, and overheat protection.
 
-> This is a from-scratch native app ported from a Claude/Design-Component mockup (`claude-design-output/`), which was a *simulated* Windows-desktop preview. All live data here is **real**; no readings are fabricated. See [`SENSORS.md`](./SENSORS.md) for the full sensor discovery report.
+> This is a from-scratch native app ported from a Claude/Design-Component mockup (`docs/claude-design-output/`), which was a *simulated* Windows-desktop preview. All live data here is **real**; no readings are fabricated. See [`SENSORS.md`](./SENSORS.md) for the full sensor discovery report.
 
 <p align="center">
   <img src="docs/screenshots/main-window.png" width="420" alt="ARMtemp main window">
@@ -112,8 +112,8 @@ Launching a second copy of the **same version** while one is already running sho
 
 ```
 armtemp/
-├── claude-design-output/      # The original Claude mockup (simulated, HTML/JS) — reference only
 ├── docs/screenshots/          # README screenshots
+├── docs/claude-design-output/ # The original Claude mockup (simulated, HTML/JS) — reference only
 ├── src/                       # React + TypeScript frontend
 │   ├── app/                   # types, theme tokens, hooks (settings, sensors)
 │   ├── components/            # MenuBar, ProcessorInfo, layouts/, SettingsDialog, MiniMode…

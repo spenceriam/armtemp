@@ -16,7 +16,7 @@ struct ProcessorRow {
 }
 
 fn main() {
-    let mut log = std::fs::File::create("C:/Users/spenc/GitHub/armtemp/wmitest-gui.log").unwrap();
+    let mut log = std::fs::File::create("wmitest-gui.log").unwrap();
     writeln!(log, "GUI-subsystem WMI test").unwrap();
 
     // Spawn the worker exactly like the app does.

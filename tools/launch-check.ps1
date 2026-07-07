@@ -1,5 +1,5 @@
 # Launch the built ARMTEMP app, confirm it runs, then stop it.
-$exe = 'C:\Users\spenc\GitHub\armtemp\src-tauri\target\release\armtemp.exe'
+$exe = Join-Path $PSScriptRoot '..\src-tauri\target\release\armtemp.exe'
 Write-Host 'Launching ARMTEMP...'
 $p = Start-Process -FilePath $exe -PassThru
 Start-Sleep -Seconds 5

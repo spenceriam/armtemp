@@ -1,5 +1,5 @@
 # Reports the PE machine type of the built ARMTEMP executable.
-$exe = 'C:\Users\spenc\GitHub\armtemp\src-tauri\target\release\armtemp.exe'
+$exe = Join-Path $PSScriptRoot '..\src-tauri\target\release\armtemp.exe'
 $bytes = [System.IO.File]::ReadAllBytes($exe)
 $peOffset = [BitConverter]::ToInt32($bytes, 60)
 $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)

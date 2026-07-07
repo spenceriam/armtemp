@@ -196,5 +196,5 @@ The application displays all sensor information in a single window matching Core
 - **EBUSY on `npm run tauri dev`:** Vite's file-watcher must not recurse into `src-tauri/target/` (locked `.dll` during cargo builds). It's excluded in `vite.config.ts` `server.watch.ignored` — don't remove that.
 - **PowerShell `$_` mangling:** running PowerShell via bash `-Command` corrupts `$_`/`$var`. Use `-File` with script files in `tools/`. (Only matters for the historical probe scripts — the app no longer shells out to PowerShell at all.)
 - **COM/WMI under Tauri:** do not reintroduce the `wmi` crate's `IWbemServices` query path — it fails with `WBEM_E_NOT_FOUND`. PDH (`sensors/pdh.rs`) is the working native approach and doesn't touch COM.
-- **Don't wire `claude-design-output/` to live data** — it's a simulated mockup. Port its visuals only.
+- **Don't wire `docs/claude-design-output/` to live data** — it's a simulated mockup. Port its visuals only.
 - **Version sync:** the version must match in all four locations (package.json, Cargo.toml, tauri.conf.json, display strings). See Version Bumping Protocol.
