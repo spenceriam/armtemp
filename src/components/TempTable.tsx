@@ -14,19 +14,20 @@ interface Props {
 // meaning), and a Power row. Per-core temps are REAL (zone-mapped: Core #0 =
 // hottest zone).
 export function TempTable({ cores, tjmax, unit, colorCode, powerW }: Props) {
-  const powerStr = powerW != null ? `${Math.round(powerW)} W` : "—";
   return (
     <div className="groupbox temp-groupbox">
       <span className="groupbox-legend">Processor #0: Temperature Readings</span>
       <div className="temp-table">
-        <div className="temp-row">
-          <div className="core-cell">Power:</div>
-          <div className="tcell sunken mono">{powerStr}</div>
-          <div />
-          <div />
-          <div />
-          <div />
-        </div>
+        {powerW != null && (
+          <div className="temp-row">
+            <div className="core-cell">Power:</div>
+            <div className="tcell sunken mono">{Math.round(powerW)} W</div>
+            <div />
+            <div />
+            <div />
+            <div />
+          </div>
+        )}
         {/* Tj. Max row doubles as the column-header row, like real Core Temp. */}
         <div className="temp-row">
           <div className="core-cell">Tj. Max:</div>

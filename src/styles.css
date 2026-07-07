@@ -421,79 +421,17 @@ body,
   display: block;
 }
 
-/* ---------- mini mode ---------- */
-.mini-wrap {
-  align-items: stretch;
-  justify-content: stretch;
-}
+/* ---------- mini mode (normal mode, stripped to model name + one averaged row) ---------- */
 .mini-root {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border-2);
+  padding-top: 2px;
+}
+.mini-model {
+  padding: 2px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
   overflow: hidden;
-}
-.mini-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 9px;
-}
-.mini-logo {
-  width: 15px;
-  height: 15px;
-  border-radius: 4px;
-  background: linear-gradient(150deg, var(--accent), var(--accent-2));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.mini-title {
-  font-size: 11px;
-  font-weight: 600;
-}
-.mini-spacer {
-  flex: 1;
-}
-.mini-btn {
-  font-size: 11px;
-  color: var(--text-3);
-  padding: 2px 5px;
-  border-radius: 4px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-.mini-btn:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-.mini-btn.close:hover {
-  background: #c42b1c;
-  color: #fff;
-}
-.mini-body {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 2px 11px 10px;
-}
-.mini-temp {
-  font-size: 30px;
-  font-weight: 600;
-}
-.mini-swatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  flex: 1;
-}
-.mini-swatch {
-  width: 13px;
-  height: 13px;
-  border-radius: 3px;
-  opacity: 0.92;
+  text-overflow: ellipsis;
 }
 
 /* ---------- settings modal ---------- */
@@ -704,11 +642,47 @@ body,
   font-size: 12px;
   color: var(--text-3);
 }
-.about-note {
-  font-size: 11px;
+.about-author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.about-x-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.about-x-link:hover {
+  color: var(--text);
+}
+.about-links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+.about-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.about-link:hover {
+  color: var(--accent-2);
+}
+.about-link-sep {
   color: var(--text-3);
-  margin-top: 14px;
-  line-height: 1.6;
 }
 .chips-list {
   display: flex;

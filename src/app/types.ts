@@ -31,6 +31,7 @@ export interface SensorSnapshot {
   zones: ZoneReading[];
   cores: CoreReading[];
   clock_mhz: number | null;
+  base_clock_mhz: number | null;
   max_clock_mhz: number | null;
   bus_speed_mhz: number | null;
   power_w: number | null;

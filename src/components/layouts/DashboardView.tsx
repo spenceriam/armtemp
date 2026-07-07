@@ -45,9 +45,11 @@ export function DashboardView({ snap, unit }: Props) {
             <div>
               Avg <span>{formatTemp(avg, unit)}</span>
             </div>
-            <div>
-              Power <span>{snap?.power_w != null ? `${Math.round(snap.power_w)} W` : "—"}</span>
-            </div>
+            {snap?.power_w != null && (
+              <div>
+                Power <span>{Math.round(snap.power_w)} W</span>
+              </div>
+            )}
           </div>
         </div>
         <Sparkline history={history} color={pkgColor} tjmax={snap?.tjmax_c ?? 100} />

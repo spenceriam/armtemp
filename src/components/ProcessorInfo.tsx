@@ -15,7 +15,8 @@ interface Props {
 export function ProcessorInfo({ snap, status }: Props) {
   const processorStr = snap?.chip_name ?? (status === "error" ? "Sensor unavailable" : "Detecting…");
   const modelStr = snap ? [snap.chip_name, snap.chip_model].filter(Boolean).join(" ") : processorStr;
-  const freqStr = snap?.clock_mhz != null ? `${(snap.clock_mhz / 1000).toFixed(2)} GHz` : "—";
+  const speedStr = snap?.clock_mhz != null ? `${(snap.clock_mhz / 1000).toFixed(2)} GHz` : "—";
+  const baseStr = snap?.base_clock_mhz ? `${(snap.base_clock_mhz / 1000).toFixed(2)} GHz` : "—";
   const boostStr = snap?.max_clock_mhz ? `${(snap.max_clock_mhz / 1000).toFixed(2)} GHz` : "—";
   const lithographyStr = snap?.lithography || "—";
   const tdpStr = snap?.tdp_w != null ? `${snap.tdp_w} W` : "—";
@@ -41,7 +42,8 @@ export function ProcessorInfo({ snap, status }: Props) {
         <div className="proc-grid">
           <Field label="Model" value={modelStr} full />
           <Field label="Platform" value={snap?.platform ?? "—"} full />
-          <Field label="Frequency" value={freqStr} full />
+          <Field label="Speed" value={speedStr} full />
+          <Field label="Base" value={baseStr} />
           <Field label="Boost" value={boostStr} />
           <Field label="Lithography" value={lithographyStr} />
           <Field
@@ -49,7 +51,7 @@ export function ProcessorInfo({ snap, status }: Props) {
             value={throttled === null ? "—" : throttled ? "Yes" : "No"}
             valueColor={throttled ? "#e0473a" : undefined}
           />
-          <Field label="TDP" value={tdpStr} />
+          <Field label="TDP" value={tdpStr} full />
           <Field label="CPUID" value={snap?.chip_model ?? "—"} full />
         </div>
       </div>

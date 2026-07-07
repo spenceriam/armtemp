@@ -46,37 +46,14 @@ export default function App() {
     return () => unlistens.forEach((u) => u());
   }, [update]);
 
-  // Mini-mode: drop native decorations + shrink to a compact always-on-top
-  // box (matches Core Temp's mini mode). On exit the auto-fit effect below
-  // restores the window to its content size.
-  useEffect(() => {
-    const win = getCurrentWindow();
-    (async () => {
-      try {
-        if (mini) {
-          await win.setDecorations(false);
-          await win.setSize(new LogicalSize(280, 130));
-          await win.setAlwaysOnTop(true);
-        } else {
-          await win.setDecorations(true);
-          await win.setAlwaysOnTop(settings.alwaysOnTop);
-        }
-      } catch (e) {
-        console.warn("mini-mode window ops failed", e);
-      }
-    })();
-    // deliberately not depending on settings.alwaysOnTop — only re-run on mini toggle
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mini]);
-
   // Content-fit window (Core Temp behavior): size the OS window to the
   // shell's rendered rect. The shell has a fixed 564px layout width and
   // natural height (styles.css), so its rect never depends on the window
   // size — no resize feedback loop — and the zoom transform is included in
-  // the measured rect automatically.
+  // the measured rect automatically. Mini mode uses the same shell/effect —
+  // it's just a smaller rendered rect, so the window shrinks to match.
   const shellRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (mini) return; // mini-mode manages its own window size
     const el = shellRef.current;
     if (!el) return;
     let last = { w: 0, h: 0 };
@@ -109,20 +86,6 @@ export default function App() {
     return <div className="loading" style={rootStyle}>Loading…</div>;
   }
 
-  // Mini-mode: render only the compact widget.
-  if (mini) {
-    return (
-      <div className="app-root mini-wrap" style={rootStyle}>
-        <MiniMode
-          snap={snap}
-          unit={unit}
-          onExpand={() => setMini(false)}
-          onClose={() => getCurrentWindow().close()}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="app-root" style={rootStyle}>
       <div ref={shellRef} className="window-shell" style={{ transform: `scale(${settings.zoom / 100})`, transformOrigin: "top left" }}>
@@ -138,23 +101,29 @@ export default function App() {
         />
 
         <div className="window-body">
-          <ProcessorInfo snap={snap} status={sensorStatus} />
+          {mini ? (
+            <MiniMode snap={snap} unit={unit} colorCode={settings.colorCodeTemps} />
+          ) : (
+            <>
+              <ProcessorInfo snap={snap} status={sensorStatus} />
 
-          {/* Layout switch — Classic (default) is the CoreTemp table. */}
-          {settings.uiStyle === "classic" && (
-            <TempTable
-              cores={cores}
-              tjmax={tjmax}
-              unit={unit}
-              colorCode={settings.colorCodeTemps}
-              powerW={snap?.power_w ?? null}
-            />
+              {/* Layout switch — Classic (default) is the CoreTemp table. */}
+              {settings.uiStyle === "classic" && (
+                <TempTable
+                  cores={cores}
+                  tjmax={tjmax}
+                  unit={unit}
+                  colorCode={settings.colorCodeTemps}
+                  powerW={snap?.power_w ?? null}
+                />
+              )}
+              {settings.uiStyle === "cards" && <CardsView cores={cores} tjmax={tjmax} unit={unit} />}
+              {settings.uiStyle === "dashboard" && <DashboardView snap={snap} unit={unit} />}
+            </>
           )}
-          {settings.uiStyle === "cards" && <CardsView cores={cores} tjmax={tjmax} unit={unit} />}
-          {settings.uiStyle === "dashboard" && <DashboardView snap={snap} unit={unit} />}
         </div>
 
-        {settings.statusBarOn && <StatusBar snap={snap} unit={unit} />}
+        {!mini && settings.statusBarOn && <StatusBar snap={snap} unit={unit} />}
       </div>
 
       {settingsOpen && (

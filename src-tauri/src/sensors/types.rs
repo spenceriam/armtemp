@@ -82,6 +82,9 @@ pub struct SensorSnapshot {
     pub cores: Vec<CoreReading>,
     /// Current package clock in MHz (real, from Win32_Processor).
     pub clock_mhz: Option<u32>,
+    /// Base clock in MHz from the chip profile (spec label, matches Task
+    /// Manager's "Base speed" — not live telemetry).
+    pub base_clock_mhz: Option<u32>,
     /// Boost/max clock in MHz (real, from Win32_Processor).
     pub max_clock_mhz: Option<u32>,
     /// Nominal bus/reference clock in MHz (100 on Snapdragon X; informational).
@@ -107,6 +110,7 @@ impl Default for SensorSnapshot {
             zones: Vec::new(),
             cores: Vec::new(),
             clock_mhz: None,
+            base_clock_mhz: None,
             max_clock_mhz: None,
             bus_speed_mhz: None,
             power_w: None,

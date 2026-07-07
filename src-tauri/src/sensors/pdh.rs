@@ -379,6 +379,11 @@ fn build_snapshot(q: &Query, profile: &ChipProfile, stats: &mut CoreStats) -> Se
     // Win32_Processor.CurrentClockSpeed this backend replaces). `max_clock_mhz`
     // comes from the chip profile's boost clock — informational, not live.
     let clock_mhz = read_single(q.freq).map(|v| v.round() as u32);
+    let base_clock_mhz = if profile.base_ghz > 0.0 {
+        Some((profile.base_ghz * 1000.0).round() as u32)
+    } else {
+        None
+    };
     let max_clock_mhz = if profile.boost_ghz > 0.0 {
         Some((profile.boost_ghz * 1000.0).round() as u32)
     } else {
@@ -404,6 +409,7 @@ fn build_snapshot(q: &Query, profile: &ChipProfile, stats: &mut CoreStats) -> Se
         zones,
         cores: cores_out,
         clock_mhz,
+        base_clock_mhz,
         max_clock_mhz,
         bus_speed_mhz: Some(100), // nominal reference clock on Snapdragon X
         power_w: None,            // confirmed empty from userspace on this firmware

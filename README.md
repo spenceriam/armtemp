@@ -47,6 +47,10 @@ npm run tauri build
 
 Output is a **native ARM64** (`AA64`) executable (~3.8 MB), no emulation.
 
+### Updating
+
+Running a newer MSI or NSIS installer over an existing install **upgrades it in place** — no need to uninstall first. This works because the bundle identifier and product name stay constant across releases; don't mix installer families (installing the MSI over an NSIS-installed copy, or vice versa, won't detect the prior install). There is no in-app auto-updater yet — updates are manual, by re-running an installer.
+
 ---
 
 ## Project layout

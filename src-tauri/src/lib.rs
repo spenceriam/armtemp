@@ -16,11 +16,23 @@ use std::time::Duration;
 use sensors::{tray::{decide, TrayMode}, ChipProfile, PdhProvider, SensorSnapshot};
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, Submenu},
-    tray::TrayIconBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, WindowEvent,
 };
 use tauri_plugin_autostart::MacosLauncher;
 use tokio::sync::Mutex;
+
+/// Restores the main window from a minimized and/or hidden state and gives
+/// it focus. Shared by the tray icon's left-click handler and the "Open
+/// ARMtemp"/"Settings" menu items — `show()` alone does not un-minimize a
+/// window that was merely minimized (as opposed to hidden via close-to-tray).
+fn restore_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+}
 
 /// Plain-data app state — fully Send+Sync.
 struct AppState {
@@ -384,7 +396,9 @@ fn update_tray(app: &tauri::AppHandle, state: &AppState, snap: &SensorSnapshot, 
 /// ITS OWN temperature and all icons share the same right-click ARMtemp menu
 /// (menu-click handling is a single global listener registered once in
 /// `setup()` — see the comment there — so attaching the shared `Menu` here is
-/// enough; no per-icon event handler is needed or wanted).
+/// enough; no per-icon MENU handler is needed or wanted). Tray-icon CLICK
+/// events are per-icon (unlike menu events), so each extra icon gets its own
+/// `on_tray_icon_event` to restore the main window on left-click.
 fn update_tray_all_cores(
     app: &tauri::AppHandle,
     state: &AppState,
@@ -402,6 +416,11 @@ fn update_tray_all_cores(
             match TrayIconBuilder::with_id(id.clone())
                 .menu(&state.tray_menu)
                 .show_menu_on_left_click(false)
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        restore_main_window(tray.app_handle());
+                    }
+                })
                 .build(app)
             {
                 Ok(_) => extras.push(id.clone()),
@@ -607,6 +626,11 @@ pub fn run() {
                 .icon(number_image(None, mono_color(), None))
                 .menu(&menu)
                 .show_menu_on_left_click(false)
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        restore_main_window(tray.app_handle());
+                    }
+                })
                 // This listener is registered globally (see tauri's
                 // `shared_app_impl!` — `TrayIconBuilder::on_menu_event` and
                 // `AppHandle::on_menu_event` both push into the SAME
@@ -616,17 +640,11 @@ pub fn run() {
                 // that would register this closure a second time and fire
                 // every action (including "exit") once per registered tray.
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "open" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
-                    }
+                    "open" => restore_main_window(app),
                     "settings" => {
+                        restore_main_window(app);
                         if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
                             let _ = w.emit("open-settings", ());
-                            let _ = w.set_focus();
                         }
                     }
                     "mini" => {

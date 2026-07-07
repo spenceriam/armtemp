@@ -15,7 +15,7 @@ use windows::Win32::Graphics::Gdi::{
     CreateCompatibleDC, CreateDIBSection, CreateFontW, DeleteDC, DeleteObject, DrawTextW,
     GdiFlush, GetTextExtentPoint32W, SelectObject, SetBkMode, SetTextColor, ANTIALIASED_QUALITY,
     BITMAPINFO, BI_RGB, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DEFAULT_PITCH, DIB_RGB_COLORS,
-    DT_CENTER, DT_SINGLELINE, DT_VCENTER, FF_DONTCARE, FW_SEMIBOLD, HFONT, OUT_DEFAULT_PRECIS,
+    DT_CENTER, DT_SINGLELINE, DT_VCENTER, FF_DONTCARE, FW_MEDIUM, HFONT, OUT_DEFAULT_PRECIS,
     TRANSPARENT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSMICON};
@@ -89,14 +89,53 @@ fn composite_over(top: (f32, f32, f32, f32), bottom: (f32, f32, f32, f32)) -> (u
     )
 }
 
+/// GDI hints and small-icon shrink-to-fit are coarse at the notification
+/// area's native 16-20px size, which is what read as a "made up font" —
+/// Segoe UI *is* the real typeface, just mangled by rasterizing straight at
+/// that tiny size. Rendering at `SUPERSAMPLE`x and box-filtering down gives
+/// GDI room to hint properly, producing a crisper, more faithful downscaled
+/// glyph — the same trick used for supersampled font/icon rendering elsewhere.
+const SUPERSAMPLE: u32 = 4;
+
+/// Draws `text` at native size via supersampled GDI rasterization (see
+/// `glyph_coverage_raw`) and box-filters the result down to `size`x`size`,
+/// returning per-pixel alpha coverage.
+fn glyph_coverage(text: &str, size: u32) -> Vec<u8> {
+    let hi_size = size * SUPERSAMPLE;
+    let hi = glyph_coverage_raw(text, hi_size, (6 * SUPERSAMPLE) as i32);
+    downsample_box(&hi, hi_size, size)
+}
+
+/// Averages `src_size`x`src_size` coverage down to `dst_size`x`dst_size` in
+/// uniform `src_size / dst_size` blocks (an integer factor by construction —
+/// `src_size` is always `dst_size * SUPERSAMPLE`).
+fn downsample_box(src: &[u8], src_size: u32, dst_size: u32) -> Vec<u8> {
+    let factor = src_size / dst_size;
+    let mut out = vec![0u8; (dst_size as usize) * (dst_size as usize)];
+    for y in 0..dst_size {
+        for x in 0..dst_size {
+            let mut sum: u32 = 0;
+            for sy in 0..factor {
+                for sx in 0..factor {
+                    let sp = (y * factor + sy) * src_size + (x * factor + sx);
+                    sum += src[sp as usize] as u32;
+                }
+            }
+            out[(y * dst_size + x) as usize] = (sum / (factor * factor)) as u8;
+        }
+    }
+    out
+}
+
 /// Draws `text` white-on-black into an offscreen 32bpp top-down DIB with GDI
 /// (grayscale-antialiased, NOT ClearType — ClearType's subpixel RGB fringing
 /// would corrupt the coverage-as-alpha read below), shrinking the font until
-/// it fits, then reads the DIB's R channel back as per-pixel alpha coverage
-/// (GDI writes no real alpha; on a black background, white-text antialiasing
-/// coverage IS the pixel's gray level, and R=G=B for true gray). Returns an
-/// all-zero (fully transparent) buffer on any GDI failure.
-fn glyph_coverage(text: &str, size: u32) -> Vec<u8> {
+/// it fits (down to `min_px_h`), then reads the DIB's R channel back as
+/// per-pixel alpha coverage (GDI writes no real alpha; on a black background,
+/// white-text antialiasing coverage IS the pixel's gray level, and R=G=B for
+/// true gray). Returns an all-zero (fully transparent) buffer on any GDI
+/// failure.
+fn glyph_coverage_raw(text: &str, size: u32, min_px_h: i32) -> Vec<u8> {
     let mut coverage = vec![0u8; (size as usize) * (size as usize)];
     let utf16: Vec<u16> = text.encode_utf16().collect();
     unsafe {
@@ -123,7 +162,7 @@ fn glyph_coverage(text: &str, size: u32) -> Vec<u8> {
         };
         let old_bitmap = SelectObject(dc, bitmap);
 
-        let mut px_h = (size as i32 * 9 / 10).max(6);
+        let mut px_h = (size as i32 * 9 / 10).max(min_px_h);
         let mut font = create_font(px_h);
         let old_font = SelectObject(dc, font);
         SetBkMode(dc, TRANSPARENT);
@@ -132,7 +171,7 @@ fn glyph_coverage(text: &str, size: u32) -> Vec<u8> {
         loop {
             let mut extent = SIZE::default();
             let _ = GetTextExtentPoint32W(dc, &utf16, &mut extent);
-            if extent.cx <= (size as i32 - 1) || px_h <= 6 {
+            if extent.cx <= (size as i32 - 1) || px_h <= min_px_h {
                 break;
             }
             SelectObject(dc, old_font);
@@ -169,7 +208,7 @@ fn create_font(px_height: i32) -> HFONT {
             0,
             0,
             0,
-            FW_SEMIBOLD.0 as i32,
+            FW_MEDIUM.0 as i32,
             0,
             0,
             0,
