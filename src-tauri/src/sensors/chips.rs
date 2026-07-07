@@ -1,5 +1,5 @@
 //! Chip profiles for the Snapdragon X / X2 families. This is the real silicon
-//! reference table ported from the Clod design's `chips` array. It is used to
+//! reference table ported from the Claude design's `chips` array. It is used to
 //! LABEL detected hardware (name, model, TjMax, cluster layout for P/E core
 //! coloring) — never to fabricate readings. The actual CPU is detected at
 //! runtime from Win32_Processor and matched against these profiles.

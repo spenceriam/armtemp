@@ -1,6 +1,6 @@
 //! Renders live tray icons from REAL readings. The number shown in the icon is
 //! the genuine current temperature (package / highest / average / per-core per
-//! the user's chosen mode). Mirrors the Clod design's three icon styles and the
+//! the user's chosen mode). Mirrors the Claude design's three icon styles and the
 //! green->yellow->orange->red temp color scale.
 
 use crate::sensors::types::{CoreReading, SensorSnapshot, ZoneReading};

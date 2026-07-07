@@ -1,4 +1,4 @@
-// Design tokens ported from the Clod design's vars()/hexA()/shade()/tcolor().
+// Design tokens ported from the Claude design's vars()/hexA()/shade()/tcolor().
 // These are the exact colors and thresholds the mockup used.
 
 export type Theme = "dark" | "light";

@@ -1,5 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { AppIcon } from "./AppIcon";
+import appIconUrl from "../assets/app-icon.png?url";
+import { ChipsList } from "./ChipsList";
 
 interface Props {
   onClose: () => void;
@@ -13,9 +14,9 @@ function open(url: string) {
   openUrl(url).catch(() => {});
 }
 
-// Standalone About dialog (Help → About ARMtemp) — credits card: logo, name,
-// version, author + links. Real Core Temp puts About under Help, not inside
-// Settings.
+// Standalone About dialog (Help → About ARMtemp) — logo, name, version,
+// author credit + links, then the detected + supported processor list.
+// Real Core Temp puts About under Help, not inside Settings.
 export function AboutDialog({ onClose }: Props) {
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -31,33 +32,35 @@ export function AboutDialog({ onClose }: Props) {
         <div className="tab-panel">
           <div className="about-head">
             <div className="about-logo">
-              <AppIcon size={30} />
+              <img src={appIconUrl} width={44} height={44} alt="ARMtemp" />
             </div>
             <div>
               <div className="about-name">ARMtemp</div>
-              <div className="about-version">Version 0.3.1 · ARM64 build · Tauri</div>
+              <div className="about-version">Version 0.3.2 · ARM64 build · Tauri</div>
+              <div className="about-author">Built by Spencer Francisco</div>
+              <div className="about-links">
+                <button
+                  className="about-x-link"
+                  onClick={() => open(X_URL)}
+                  title="@spencer_i_am on X"
+                  aria-label="@spencer_i_am on X"
+                >
+                  <XIcon size={13} />
+                </button>
+                <button className="about-link" onClick={() => open(SITE_URL)}>
+                  spencer.build
+                </button>
+                <span className="about-link-sep">·</span>
+                <button className="about-link" onClick={() => open(REPO_URL)}>
+                  GitHub repo
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="about-author">
-            Built by Spencer Francisco
-            <button
-              className="about-x-link"
-              onClick={() => open(X_URL)}
-              title="@spencer_i_am on X"
-              aria-label="@spencer_i_am on X"
-            >
-              <XIcon size={13} />
-            </button>
-          </div>
-          <div className="about-links">
-            <button className="about-link" onClick={() => open(SITE_URL)}>
-              spencer.build
-            </button>
-            <span className="about-link-sep">·</span>
-            <button className="about-link" onClick={() => open(REPO_URL)}>
-              GitHub repo
-            </button>
+          <div className="groupbox dlg-group">
+            <span className="groupbox-legend">Detected processor</span>
+            <ChipsList />
           </div>
         </div>
 

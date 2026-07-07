@@ -1,20 +1,68 @@
+<div align="center">
+
 # ARMtemp
 
-A native **temperature monitor for Snapdragon X / X2** processors (X1/X1P/X1E, X2/X2P/X2E — Qualcomm Oryon) on **Windows on ARM (ARM64)**.
+**A native temperature monitor for Snapdragon X / X2 processors on Windows on ARM.**
 
-ARMtemp reads real on-die thermal sensors and displays package + multi-zone temperatures, per-core utilization, and power — recreating the [Core Temp](https://www.alcpu.com/CoreTemp/) experience for the Snapdragon X family. Built as a small native ARM64 binary (Tauri 2 + Rust + React), with a live system-tray icon, mini-mode, and overheat protection.
+![Platform](https://img.shields.io/badge/platform-Windows%20on%20ARM64-0078D4)
+![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB)
+![Version](https://img.shields.io/badge/version-0.3.2-blue)
 
-> This is a from-scratch native app ported from a Clod/Design-Component mockup (`claude-design-output/`), which was a *simulated* Windows-desktop preview. All live data here is **real**; no readings are fabricated. See [`SENSORS.md`](./SENSORS.md) for the full sensor discovery report.
+</div>
+
+ARMtemp reads real on-die thermal sensors and displays package + multi-zone temperatures, per-core utilization, and power — recreating the [Core Temp](https://www.alcpu.com/CoreTemp/) experience for the Snapdragon X family (X1/X1P/X1E, X2/X2P/X2E — Qualcomm Oryon). Built as a small native ARM64 binary (Tauri 2 + Rust + React), with a live system-tray icon, mini mode, and overheat protection.
+
+> This is a from-scratch native app ported from a Claude/Design-Component mockup (`claude-design-output/`), which was a *simulated* Windows-desktop preview. All live data here is **real**; no readings are fabricated. See [`SENSORS.md`](./SENSORS.md) for the full sensor discovery report.
+
+<p align="center">
+  <img src="docs/screenshots/main-window.png" width="420" alt="ARMtemp main window">
+</p>
+
+## Contents
+
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [How it reads sensors](#how-it-reads-sensors-the-important-part)
+- [Build & run](#build--run)
+- [Project layout](#project-layout)
 
 ---
 
-## Status
+## Features
 
-**Working:** native ARM64 build, real telemetry (package temp via ACPI thermal zones, per-core load, CPU identity), 3 UI layouts (Classic / Cards / Dashboard), mini-mode, 5-tab settings dialog, live tray icon with temperature, context menu, close-to-tray, overheat-protection notifications. MSI + NSIS installers build.
+- Real telemetry: package temperature via ACPI thermal zones, per-core load, live CPU speed/identity
+- 3 UI layouts — Classic, Cards, Dashboard
+- Mini mode — the same window, stripped to the model name and one row averaging every core
+- Live system-tray icon with the current temperature, right-click menu, per-core "all cores" mode
+- Overheat protection — notify, sleep, or shut down at a configurable threshold
+- Close-to-tray, start-with-Windows, °C/°F, dark/light theme
+- MSI + NSIS installers that upgrade an existing install in place (see [Updating](#updating))
 
-**Honest limitations (by firmware, not by choice):**
-- **Per-core temperatures** are not exposed by any userspace surface on Snapdragon X. The firmware exposes ~17 valid *zone* temperatures (which ARMtemp shows) plus real per-core *load*. True per-core temps would require a signed kernel driver or private Surface/Qualcomm SMF IOCTLs — a future workstream.
-- **Voltage** is not exposed; the field shows `—`.
+**Honest limitations (firmware, not by choice):**
+- **Per-core temperatures** aren't exposed by any userspace surface on Snapdragon X. The firmware exposes ~17 valid *zone* temperatures (which ARMtemp shows) plus real per-core *load*; true per-core temps would need a signed kernel driver or private Surface/Qualcomm SMF IOCTLs.
+- **Voltage and package power** aren't exposed; those fields show `—` rather than a fabricated number.
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/main-window.png" width="260"><br><sub>Main window (Classic layout)</sub></td>
+    <td align="center"><img src="docs/screenshots/mini-mode.png" width="260"><br><sub>Mini mode</sub></td>
+    <td align="center"><img src="docs/screenshots/overheat-protection.png" width="260"><br><sub>Overheat protection</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/settings-general.png" width="260"><br><sub>Settings — General</sub></td>
+    <td align="center"><img src="docs/screenshots/settings-display.png" width="260"><br><sub>Settings — Display</sub></td>
+    <td align="center"><img src="docs/screenshots/settings-notification-area.png" width="260"><br><sub>Settings — Notification Area</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/settings-taskbar.png" width="260"><br><sub>Settings — Windows Taskbar</sub></td>
+    <td align="center"><img src="docs/screenshots/tray-icon.png" width="260"><br><sub>Live tray icon</sub></td>
+    <td></td>
+  </tr>
+</table>
 
 ---
 
@@ -51,28 +99,27 @@ Output is a **native ARM64** (`AA64`) executable (~3.8 MB), no emulation.
 
 Running a newer MSI or NSIS installer over an existing install **upgrades it in place** — no need to uninstall first. This works because the bundle identifier and product name stay constant across releases; don't mix installer families (installing the MSI over an NSIS-installed copy, or vice versa, won't detect the prior install). There is no in-app auto-updater yet — updates are manual, by re-running an installer.
 
+Launching a second copy of the **same version** while one is already running shows an "already running" message instead of opening a duplicate window; a **different** version (e.g. a dev build) is allowed to run alongside it.
+
 ---
 
 ## Project layout
 
 ```
 armtemp/
-├── claude-design-output/      # The original Clod mockup (simulated, HTML/JS) — reference only
+├── claude-design-output/      # The original Claude mockup (simulated, HTML/JS) — reference only
+├── docs/screenshots/          # README screenshots
 ├── src/                       # React + TypeScript frontend
 │   ├── app/                   # types, theme tokens, hooks (settings, sensors)
-│   ├── components/            # TitleBar, ProcessorInfo, layouts/, SettingsDialog, MiniMode…
+│   ├── components/            # MenuBar, ProcessorInfo, layouts/, SettingsDialog, MiniMode…
 │   └── styles.css             # Design tokens ported from the mockup
 ├── src-tauri/                 # Rust + Tauri backend
 │   └── src/
-│       ├── lib.rs             # App wiring, poll loop, tray, IPC commands
-│       └── sensors/           # Real telemetry: powershell.rs (primary), chips.rs, tray.rs, types.rs
+│       ├── lib.rs             # App wiring, poll loop, tray, IPC commands, single-instance guard
+│       └── sensors/           # Real telemetry: pdh.rs (primary), chips.rs, tray.rs, tray_render.rs, types.rs
 ├── tools/                     # Sensor probe scripts (Phase 0 artifacts) + icon generator
 └── SENSORS.md                 # Full sensor discovery report (what works, what doesn't, why)
 ```
-
-## Design parity
-
-Recreates Core Temp's actual desktop layout — native title bar and window chrome (no custom-drawn frame, no transparency/blur), a real File/Options/Tools/Help menu bar, a Select CPU combo, Win32-style etched group boxes with sunken read-only value fields for Processor Information, and a Temperature Readings table with colored temperature text (no dots/bars) — while keeping our own dark/light theming (real Core Temp has none), the accent + shade color helpers, the green→yellow→orange→red temperature color scale, the Cards grid, the Dashboard sparkline, a chrome-less mini-mode, a classic tabbed Settings dialog (General / Display / Notification Area / Windows Taskbar — native checkboxes, OK/Cancel/Apply) with separate Overheat protection (Options menu) and About (Help menu) dialogs, and the tray icon with its context menu. Dropped (provided by Windows itself now): the simulated desktop/taskbar/Start-menu chrome and the random data generator.
 
 ---
 

@@ -1,6 +1,6 @@
 # Generates the ARMTEMP icon set (PNG + ICO) from scratch using .NET drawing.
 # Produces a 150deg gradient tile (accent blue) with a simple thermometer glyph —
-# the same mark used in the Clod design.
+# the same mark used in the Claude design.
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 

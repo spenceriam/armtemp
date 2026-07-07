@@ -34,6 +34,52 @@ fn restore_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     }
 }
 
+/// Guards against launching two instances of the SAME version at once
+/// (double-clicking the exe twice, or an autostart relaunch racing a manual
+/// one) while still letting a DIFFERENT version run alongside — e.g. testing
+/// a dev build next to an already-running production install. Keyed on
+/// `CARGO_PKG_VERSION` via a named Win32 mutex rather than the bundle
+/// identifier, which `tauri-plugin-single-instance` locks on (making it
+/// version-blind and unable to satisfy this). Fails open: if the mutex API
+/// itself errors, the launch proceeds rather than blocking the app over a
+/// Win32 quirk.
+fn acquire_single_instance_lock() -> bool {
+    use windows::core::HSTRING;
+    use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS, HWND};
+    use windows::Win32::System::Threading::CreateMutexW;
+    use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
+
+    let version = env!("CARGO_PKG_VERSION");
+    let name = HSTRING::from(format!("armtemp-single-instance-{version}"));
+    let handle = match unsafe { CreateMutexW(None, true, &name) } {
+        Ok(h) => h,
+        Err(_) => return true, // fail open
+    };
+    let already_running = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
+    if !already_running {
+        // `HANDLE` is a plain Copy newtype with no `Drop` impl — it is never
+        // auto-closed, so simply not calling `CloseHandle` holds the mutex
+        // for the process lifetime (Windows reclaims it on process exit).
+        let _ = handle;
+        return true;
+    }
+
+    // An autostart relaunch (`--minimized`) racing the already-running
+    // instance should bow out quietly, not pop up a dialog.
+    if std::env::args().any(|a| a == "--minimized") {
+        return false;
+    }
+    unsafe {
+        let _ = MessageBoxW(
+            HWND::default(),
+            &HSTRING::from(format!("ARMtemp {version} is already running.")),
+            &HSTRING::from("ARMtemp"),
+            MB_OK | MB_ICONINFORMATION,
+        );
+    }
+    false
+}
+
 /// Plain-data app state — fully Send+Sync.
 struct AppState {
     provider: PdhProvider,
@@ -570,6 +616,10 @@ fn start_poll_loop(app: tauri::AppHandle, state: Arc<AppState>) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if !acquire_single_instance_lock() {
+        return;
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
