@@ -25,6 +25,8 @@ ARMtemp reads real ACPI thermal-zone sensors and displays a single honest CPU te
 - [How it reads sensors](#how-it-reads-sensors-the-important-part)
 - [Build & run](#build--run)
 - [Project layout](#project-layout)
+- [Acknowledgments](#acknowledgments)
+- [License](#license)
 
 ---
 
@@ -125,6 +127,18 @@ armtemp/
 ├── tools/                     # Sensor probe scripts (Phase 0 artifacts) + icon generator
 └── SENSORS.md                 # Full sensor discovery report (what works, what doesn't, why)
 ```
+
+---
+
+## Acknowledgments
+
+Thanks to [Core Temp](https://www.alcpu.com/CoreTemp/) — I've been a fan and used it on all of my personal computers for the last 20 years. ARMtemp is my own small tribute to Core Temp, and an excuse to dogfood real telemetry on my own Snapdragon X-based machines.
+
+---
+
+## License
+
+Licensed under the [GNU Affero General Public License v3.0](./LICENSE.txt).
 
 ---
 
