@@ -1,0 +1,48 @@
+name: Release
+
+# Builds the native ARM64 installers (MSI + NSIS) on GitHub's hosted
+# windows-11-arm runner and attaches them to a DRAFT GitHub release.
+# Trigger by pushing a version tag (v0.5.0) or manually via workflow_dispatch.
+# The draft lets you review/edit release notes before publishing.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: "ARMtemp v__VERSION__"
+          releaseDraft: true
+          releaseBody: |
+            Native ARM64 (`aarch64-pc-windows-msvc`) build — no x64 emulation.
+            Installers upgrade an existing install in place.
