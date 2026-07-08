@@ -6,7 +6,7 @@
 
 ![Platform](https://img.shields.io/badge/platform-Windows%20on%20ARM64-0078D4)
 ![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB)
-![Version](https://img.shields.io/badge/version-0.5.0-blue)
+![Version](https://img.shields.io/badge/version-0.4.3-blue)
 
 </div>
 
