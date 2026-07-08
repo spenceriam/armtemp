@@ -1,9 +1,9 @@
 name: Release
 
-# Builds the native ARM64 installers exactly like the local dev flow
-# (`npm run tauri build` on an ARM64 Windows machine → MSI + NSIS in
+# Builds the native ARM64 installer exactly like the local dev flow
+# (`npm run tauri build` on an ARM64 Windows machine → NSIS setup.exe in
 # src-tauri/target/release/bundle) on GitHub's hosted windows-11-arm
-# runner, attaches them to a draft GitHub release, then auto-publishes
+# runner, attaches it to a draft GitHub release, then auto-publishes
 # the release once the build and upload complete successfully.
 #
 # Trigger: push a version tag (e.g. v0.4.3) or run manually
@@ -43,9 +43,8 @@ jobs:
 
       # Same as running `npm run tauri build` locally: builds the frontend
       # (tsc + vite), compiles the native aarch64-pc-windows-msvc binary,
-      # and bundles ARMtemp_<version>_arm64_en-US.msi +
-      # ARMtemp_<version>_arm64-setup.exe. Kept as a draft until the
-      # publish job below confirms everything uploaded.
+      # and bundles ARMtemp_<version>_arm64-setup.exe. Kept as a draft until
+      # the publish job below confirms everything uploaded.
       - name: Build installers and draft release
         id: tauri
         uses: tauri-apps/tauri-action@v0
@@ -62,7 +61,7 @@ jobs:
 
             ---
 
-            Native ARM64 (`aarch64-pc-windows-msvc`) build — no x64 emulation. Installers upgrade an existing install in place.
+            Native ARM64 (`aarch64-pc-windows-msvc`) build — no x64 emulation. The installer upgrades an existing install in place, including migrating a prior MSI-based install (≤0.4.3) automatically.
 
   publish:
     needs: build
