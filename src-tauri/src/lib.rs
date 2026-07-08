@@ -336,8 +336,11 @@ fn adapt_for_taskbar(rgb: (u8, u8, u8)) -> (u8, u8, u8) {
 }
 
 /// Build a tray/overlay image for `value` using the native-font renderer.
-/// `None` draws an honest dash — never a fabricated number. `degree` appends
-/// a `°` to a real reading only — the no-reading dash never gets one.
+/// `None` draws an honest dash — never a fabricated number. `degree` draws a
+/// small superscript `°` next to a real reading only — the no-reading dash
+/// never gets one. The degree mark is rendered in its own reserved column
+/// (see `render_number_rgba`) rather than appended to the digit string, so
+/// turning it on doesn't force the digits to shrink to fit a 3rd glyph.
 fn number_image(
     value: Option<i32>,
     fg: (u8, u8, u8),
@@ -347,11 +350,11 @@ fn number_image(
 ) -> tauri::image::Image<'static> {
     let size = sensors::tray_render::tray_icon_size();
     let text = match value {
-        Some(v) if degree => format!("{v}°"),
         Some(v) => v.to_string(),
         None => "-".to_string(),
     };
-    let rgba = sensors::tray_render::render_number_rgba(&text, fg, plate, size, bold);
+    let show_degree = degree && value.is_some();
+    let rgba = sensors::tray_render::render_number_rgba(&text, fg, plate, size, bold, show_degree);
     tauri::image::Image::new_owned(rgba, size, size)
 }
 
