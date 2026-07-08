@@ -1,0 +1,76 @@
+name: Release
+
+# Builds the native ARM64 installers exactly like the local dev flow
+# (`npm run tauri build` on an ARM64 Windows machine → MSI + NSIS in
+# src-tauri/target/release/bundle) on GitHub's hosted windows-11-arm
+# runner, attaches them to a draft GitHub release, then auto-publishes
+# the release once the build and upload complete successfully.
+#
+# Trigger: push a version tag (e.g. v0.4.3) or run manually
+# (workflow_dispatch) — the manual run creates the tag/release itself.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-11-arm
+    outputs:
+      release_id: ${{ steps.tauri.outputs.releaseId }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # Same as running `npm run tauri build` locally: builds the frontend
+      # (tsc + vite), compiles the native aarch64-pc-windows-msvc binary,
+      # and bundles ARMtemp_<version>_arm64_en-US.msi +
+      # ARMtemp_<version>_arm64-setup.exe. Kept as a draft until the
+      # publish job below confirms everything uploaded.
+      - name: Build installers and draft release
+        id: tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: "ARMtemp v__VERSION__"
+          releaseDraft: true
+          releaseBody: |
+            ## What's changed in v__VERSION__
+
+            _See the commit history / merged PRs for this release._
+
+            ---
+
+            Native ARM64 (`aarch64-pc-windows-msvc`) build — no x64 emulation. Installers upgrade an existing install in place.
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X PATCH "repos/${{ github.repository }}/releases/${{ needs.build.outputs.release_id }}" \
+            -F draft=false -F make_latest=true

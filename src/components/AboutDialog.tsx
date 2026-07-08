@@ -36,7 +36,7 @@ export function AboutDialog({ onClose }: Props) {
             </div>
             <div>
               <div className="about-name">ARMtemp</div>
-              <div className="about-version">Version 0.4.2 · ARM64 build · Tauri</div>
+              <div className="about-version">Version 0.4.3 · ARM64 build · Tauri</div>
               <div className="about-author">Built by Spencer Francisco</div>
               <div className="about-links">
                 <button
