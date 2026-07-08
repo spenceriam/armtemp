@@ -15,7 +15,7 @@ use windows::Win32::Graphics::Gdi::{
     CreateCompatibleDC, CreateDIBSection, CreateFontW, DeleteDC, DeleteObject, DrawTextW,
     GdiFlush, GetTextExtentPoint32W, SelectObject, SetBkMode, SetTextColor, ANTIALIASED_QUALITY,
     BITMAPINFO, BI_RGB, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DEFAULT_PITCH, DIB_RGB_COLORS,
-    DT_CENTER, DT_SINGLELINE, DT_VCENTER, FF_DONTCARE, FW_MEDIUM, HFONT, OUT_DEFAULT_PRECIS,
+    DT_CENTER, DT_SINGLELINE, DT_VCENTER, FF_DONTCARE, FW_BOLD, FW_MEDIUM, HFONT, OUT_DEFAULT_PRECIS,
     TRANSPARENT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSMICON};
@@ -31,14 +31,16 @@ pub fn tray_icon_size() -> u32 {
 /// 2-3 digit values and a leading minus sign fit. `fg` colors the glyph;
 /// `plate` optionally draws a background plate (reusing the Rounded/Badge
 /// plate math from `sensors::tray`) beneath it. Returns an all-transparent
-/// buffer if any GDI call fails — never panics.
+/// buffer if any GDI call fails — never panics. `bold` selects the tray
+/// font weight (Bold vs. the default Medium — see `create_font`).
 pub fn render_number_rgba(
     text: &str,
     fg: (u8, u8, u8),
     plate: Option<((u8, u8, u8), TrayStyle)>,
     size: u32,
+    bold: bool,
 ) -> Vec<u8> {
-    let coverage = glyph_coverage(text, size);
+    let coverage = glyph_coverage(text, size, bold);
     let mut out = vec![0u8; (size as usize) * (size as usize) * 4];
     for y in 0..size {
         for x in 0..size {
@@ -100,9 +102,9 @@ const SUPERSAMPLE: u32 = 4;
 /// Draws `text` at native size via supersampled GDI rasterization (see
 /// `glyph_coverage_raw`) and box-filters the result down to `size`x`size`,
 /// returning per-pixel alpha coverage.
-fn glyph_coverage(text: &str, size: u32) -> Vec<u8> {
+fn glyph_coverage(text: &str, size: u32, bold: bool) -> Vec<u8> {
     let hi_size = size * SUPERSAMPLE;
-    let hi = glyph_coverage_raw(text, hi_size, (6 * SUPERSAMPLE) as i32);
+    let hi = glyph_coverage_raw(text, hi_size, (6 * SUPERSAMPLE) as i32, bold);
     downsample_box(&hi, hi_size, size)
 }
 
@@ -135,7 +137,7 @@ fn downsample_box(src: &[u8], src_size: u32, dst_size: u32) -> Vec<u8> {
 /// white-text antialiasing coverage IS the pixel's gray level, and R=G=B for
 /// true gray). Returns an all-zero (fully transparent) buffer on any GDI
 /// failure.
-fn glyph_coverage_raw(text: &str, size: u32, min_px_h: i32) -> Vec<u8> {
+fn glyph_coverage_raw(text: &str, size: u32, min_px_h: i32, bold: bool) -> Vec<u8> {
     let mut coverage = vec![0u8; (size as usize) * (size as usize)];
     let utf16: Vec<u16> = text.encode_utf16().collect();
     unsafe {
@@ -163,7 +165,7 @@ fn glyph_coverage_raw(text: &str, size: u32, min_px_h: i32) -> Vec<u8> {
         let old_bitmap = SelectObject(dc, bitmap);
 
         let mut px_h = (size as i32 * 9 / 10).max(min_px_h);
-        let mut font = create_font(px_h);
+        let mut font = create_font(px_h, bold);
         let old_font = SelectObject(dc, font);
         SetBkMode(dc, TRANSPARENT);
         let _ = SetTextColor(dc, COLORREF(0x00FF_FFFF));
@@ -177,7 +179,7 @@ fn glyph_coverage_raw(text: &str, size: u32, min_px_h: i32) -> Vec<u8> {
             SelectObject(dc, old_font);
             let _ = DeleteObject(font);
             px_h -= 1;
-            font = create_font(px_h);
+            font = create_font(px_h, bold);
             SelectObject(dc, font);
         }
 
@@ -201,14 +203,15 @@ fn glyph_coverage_raw(text: &str, size: u32, min_px_h: i32) -> Vec<u8> {
     coverage
 }
 
-fn create_font(px_height: i32) -> HFONT {
+fn create_font(px_height: i32, bold: bool) -> HFONT {
+    let weight = if bold { FW_BOLD.0 } else { FW_MEDIUM.0 };
     unsafe {
         CreateFontW(
             -px_height,
             0,
             0,
             0,
-            FW_MEDIUM.0 as i32,
+            weight as i32,
             0,
             0,
             0,

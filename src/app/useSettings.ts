@@ -22,6 +22,8 @@ function backendSettings(s: AppSettings) {
     pollingIntervalMs: s.pollingIntervalMs,
     trayOn: s.trayOn,
     trayTooltipAllCores: s.trayTooltipAllCores,
+    trayBoldFont: s.trayBoldFont,
+    trayDegreeSymbol: s.trayDegreeSymbol,
     taskbarOn: s.taskbarOn,
     taskbarAccent: s.taskbarAccent,
     theme: s.theme,

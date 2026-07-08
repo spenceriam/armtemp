@@ -285,6 +285,20 @@ function NotifTab({
           ]}
           onChange={(v) => update({ trayStyle: v })}
         />
+        <SelectRow<"bold" | "normal">
+          label="Font weight"
+          value={settings.trayBoldFont ? "bold" : "normal"}
+          options={[
+            ["bold", "Bold"],
+            ["normal", "Normal"],
+          ]}
+          onChange={(v) => update({ trayBoldFont: v === "bold" })}
+        />
+        <Check
+          label="Show ° symbol in the tray icon"
+          checked={settings.trayDegreeSymbol}
+          onChange={(v) => update({ trayDegreeSymbol: v })}
+        />
       </Group>
     </>
   );

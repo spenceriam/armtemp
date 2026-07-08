@@ -63,6 +63,8 @@ export interface AppSettings {
   trayOn: boolean;
   trayStyle: TrayStyle;
   trayTooltipAllCores: boolean;
+  trayBoldFont: boolean;
+  trayDegreeSymbol: boolean;
   // Windows Taskbar
   taskbarOn: boolean;
   taskbarAccent: boolean;
@@ -90,6 +92,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   trayOn: true,
   trayStyle: "plain",
   trayTooltipAllCores: true,
+  trayBoldFont: true,
+  trayDegreeSymbol: false,
   // Windows Taskbar
   taskbarOn: true,
   taskbarAccent: true,
