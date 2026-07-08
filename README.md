@@ -14,9 +14,7 @@ ARMtemp reads real ACPI thermal-zone sensors and displays a single honest CPU te
 
 > This is a from-scratch native app ported from a Claude/Design-Component mockup (`docs/claude-design-output/`), which was a *simulated* Windows-desktop preview. All live data here is **real**; no readings are fabricated. See [`SENSORS.md`](./SENSORS.md) for the full sensor discovery report.
 
-<p align="center">
-  <img src="docs/screenshots/main-window.png" width="420" alt="ARMtemp main window">
-</p>
+(Placeholder for screenshot)
 
 ## Contents
 
