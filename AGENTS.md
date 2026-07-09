@@ -188,10 +188,10 @@ The application displays all sensor information in a single window matching Core
 - Test all 3 layouts (Classic, Cards, Dashboard)
 ## Build and deployment
 - Native target: **Windows ARM64** (`aarch64-pc-windows-msvc`). The binary is genuinely ARM64 — no x64 emulation.
-- Installers: MSI + NSIS, produced by `npm run tauri build`, named `ARMtemp_<version>_arm64_*.msi` / `-setup.exe`.
+- Installer: NSIS only (as of 0.4.4 — MSI was dropped), produced by `npm run tauri build`, named `ARMtemp_<version>_arm64-setup.exe`. Uses a custom template forked from tauri-bundler ([src-tauri/windows/installer.nsi](src-tauri/windows/installer.nsi) — see its header comment for the full delta list and re-sync procedure if the Tauri CLI is upgraded).
 - The frontend builds to `dist/`, which Tauri bundles into the native binary.
 - Release profile: optimized (`lto`, `strip`, `opt-level = "s"`).
-- **In-place upgrades**: both installers upgrade an existing install in place as long as `identifier` (`com.armtemp.app`) and `productName` (`ARMtemp`) in `tauri.conf.json` stay constant across releases — do not change either casually. Don't mix installer families (MSI vs NSIS) across an upgrade. No in-app auto-updater is wired up (no `tauri-plugin-updater`, signing keys, or hosted `latest.json`) — that's a future workstream requiring CI/hosting.
+- **In-place upgrades**: the installer upgrades an existing install in place as long as `identifier` (`com.armtemp.app`) and `productName` (`ARMtemp`) in `tauri.conf.json` stay constant across releases — do not change either casually. A prior MSI-based install (≤0.4.3) is detected and migrated automatically (passively, no msiexec prompts). No in-app auto-updater is wired up (no `tauri-plugin-updater`, signing keys, or hosted `latest.json`) — that's a future workstream requiring CI/hosting.
 ## Common pitfalls
 - **EBUSY on `npm run tauri dev`:** Vite's file-watcher must not recurse into `src-tauri/target/` (locked `.dll` during cargo builds). It's excluded in `vite.config.ts` `server.watch.ignored` — don't remove that.
 - **PowerShell `$_` mangling:** running PowerShell via bash `-Command` corrupts `$_`/`$var`. Use `-File` with script files in `tools/`. (Only matters for the historical probe scripts — the app no longer shells out to PowerShell at all.)

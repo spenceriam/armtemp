@@ -94,6 +94,10 @@ struct AppState {
     overheat_armed: Mutex<bool>,
     /// Tray-menu checkmark kept in sync with settings from `update_settings`.
     unit_c_item: CheckMenuItem<tauri::Wry>,
+    /// Tray-menu checkmark kept in sync with mini-mode state, wherever it's
+    /// toggled from (tray menu or the in-window Options menu) — see
+    /// `set_mini_state`.
+    mini_item: CheckMenuItem<tauri::Wry>,
 }
 
 /// Once an overheat action fires, require the package temp to drop this many
@@ -122,6 +126,10 @@ struct AppSettings {
     tray_on: bool,
     #[serde(rename = "trayTooltipAllCores", default = "default_true")]
     tray_tooltip_all_cores: bool,
+    #[serde(rename = "trayBoldFont", default = "default_true")]
+    tray_bold_font: bool,
+    #[serde(rename = "trayDegreeSymbol", default)]
+    tray_degree_symbol: bool,
     #[serde(rename = "taskbarOn", default = "default_true")]
     taskbar_on: bool,
     #[serde(rename = "taskbarAccent", default = "default_true")]
@@ -156,6 +164,8 @@ impl Default for AppSettings {
             polling_interval_ms: default_polling_ms(),
             tray_on: true,
             tray_tooltip_all_cores: true,
+            tray_bold_font: true,
+            tray_degree_symbol: false,
             taskbar_on: true,
             taskbar_accent: true,
             theme: default_theme(),
@@ -216,6 +226,14 @@ fn get_profile(state: tauri::State<'_, Arc<AppState>>) -> serde_json::Value {
 #[tauri::command]
 fn exit_app(app: tauri::AppHandle) {
     app.exit(0);
+}
+
+/// Keeps the tray menu's "Mini-mode" checkmark honest. Mini mode is ephemeral
+/// UI state (not persisted settings), so the frontend reports it here on
+/// every toggle rather than routing it through `update_settings`.
+#[tauri::command]
+fn set_mini_state(mini: bool, state: tauri::State<'_, Arc<AppState>>) {
+    let _ = state.mini_item.set_checked(mini);
 }
 
 #[tauri::command]
@@ -318,18 +336,25 @@ fn adapt_for_taskbar(rgb: (u8, u8, u8)) -> (u8, u8, u8) {
 }
 
 /// Build a tray/overlay image for `value` using the native-font renderer.
-/// `None` draws an honest dash — never a fabricated number.
+/// `None` draws an honest dash — never a fabricated number. `degree` draws a
+/// small superscript `°` next to a real reading only — the no-reading dash
+/// never gets one. The degree mark is rendered in its own reserved column
+/// (see `render_number_rgba`) rather than appended to the digit string, so
+/// turning it on doesn't force the digits to shrink to fit a 3rd glyph.
 fn number_image(
     value: Option<i32>,
     fg: (u8, u8, u8),
     plate: Option<((u8, u8, u8), sensors::tray::TrayStyle)>,
+    bold: bool,
+    degree: bool,
 ) -> tauri::image::Image<'static> {
     let size = sensors::tray_render::tray_icon_size();
     let text = match value {
         Some(v) => v.to_string(),
         None => "-".to_string(),
     };
-    let rgba = sensors::tray_render::render_number_rgba(&text, fg, plate, size);
+    let show_degree = degree && value.is_some();
+    let rgba = sensors::tray_render::render_number_rgba(&text, fg, plate, size, bold, show_degree);
     tauri::image::Image::new_owned(rgba, size, size)
 }
 
@@ -374,7 +399,7 @@ fn update_tray(app: &tauri::AppHandle, snap: &SensorSnapshot, settings: &AppSett
         sensors::tray::TrayStyle::Plain => (mono_color(), None),
         _ => ((255, 255, 255), Some((adapt_for_taskbar(d.color_rgb), style))),
     };
-    let img = number_image(shown, fg, plate);
+    let img = number_image(shown, fg, plate, settings.tray_bold_font, settings.tray_degree_symbol);
 
     let header = match shown {
         Some(t) => format!("ARMtemp — {t}°{unit}"),
@@ -403,7 +428,9 @@ fn update_taskbar_overlay(app: &tauri::AppHandle, snap: &SensorSnapshot, setting
             let temp_color = snap.package_c.map(|v| sensors::tray::temp_color(v, snap.tjmax_c));
             let color = if settings.taskbar_accent { ACCENT_RGB } else { temp_color.unwrap_or((140, 140, 140)) };
             let val = val_c.map(|v| unit_convert(v, is_f));
-            let img = number_image(val, (255, 255, 255), Some((color, sensors::tray::TrayStyle::Badge)));
+            // Overlay badge never shows the degree symbol — there's no room
+            // for it at that size — but bold still follows the setting.
+            let img = number_image(val, (255, 255, 255), Some((color, sensors::tray::TrayStyle::Badge)), settings.tray_bold_font, false);
             if let Err(e) = w.set_overlay_icon(Some(img)) {
                 eprintln!("[armtemp] taskbar overlay failed: {e}");
             }
@@ -508,7 +535,7 @@ pub fn run() {
             // Tray context menu.
             let open = MenuItem::with_id(app, "open", "Open ARMtemp", true, None::<&str>)?;
             let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
-            let mini = MenuItem::with_id(app, "mini", "Mini-mode", true, None::<&str>)?;
+            let mini = CheckMenuItem::with_id(app, "mini", "Mini-mode", true, false, None::<&str>)?;
 
             // Unit submenu (°C / °F quick toggle — also in Settings → General).
             let unit_c = CheckMenuItem::with_id(app, "unit_c", "°C", true, true, None::<&str>)?;
@@ -536,7 +563,7 @@ pub fn run() {
             // so the tray's identity is "the number" from the very first
             // frame — never the generic app logo.
             let _tray = TrayIconBuilder::with_id("main-tray")
-                .icon(number_image(None, mono_color(), None))
+                .icon(number_image(None, mono_color(), None, true, false))
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_tray_icon_event(|tray, event| {
@@ -593,6 +620,7 @@ pub fn run() {
                 settings: Mutex::new(AppSettings::default()),
                 overheat_armed: Mutex::new(true),
                 unit_c_item: unit_c.clone(),
+                mini_item: mini.clone(),
             });
             app.manage(state.clone());
 
@@ -665,7 +693,8 @@ pub fn run() {
             get_profile,
             refresh_now,
             update_settings,
-            exit_app
+            exit_app,
+            set_mini_state
         ])
         .run(tauri::generate_context!())
         .expect("error while running ARMtemp");

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import appIconUrl from "../assets/app-icon.png?url";
 import { ChipsList } from "./ChipsList";
@@ -18,6 +20,11 @@ function open(url: string) {
 // author credit + links, then the detected + supported processor list.
 // Real Core Temp puts About under Help, not inside Settings.
 export function AboutDialog({ onClose }: Props) {
+  const [version, setVersion] = useState("");
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => {});
+  }, []);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-small" onClick={(e) => e.stopPropagation()}>
@@ -32,11 +39,11 @@ export function AboutDialog({ onClose }: Props) {
         <div className="tab-panel">
           <div className="about-head">
             <div className="about-logo">
-              <img src={appIconUrl} width={44} height={44} alt="ARMtemp" />
+              <img src={appIconUrl} width={44} height={44} alt="ARMtemp" draggable={false} />
             </div>
             <div>
               <div className="about-name">ARMtemp</div>
-              <div className="about-version">Version 0.4.3 · ARM64 build · Tauri</div>
+              <div className="about-version">Version {version} · ARM64 build · Tauri</div>
               <div className="about-author">Built by Spencer Francisco</div>
               <div className="about-links">
                 <button

@@ -23,7 +23,10 @@ use windows::Win32::System::Performance::{
     PDH_FMT_DOUBLE,
 };
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
-use windows::Win32::System::SystemInformation::GetSystemInfo;
+use windows::Win32::System::SystemInformation::{
+    GetLogicalProcessorInformationEx, GetSystemInfo, RelationProcessorCore,
+    SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX,
+};
 use windows::core::PCWSTR;
 
 use crate::sensors::chips::{match_profile, ChipProfile};
@@ -279,7 +282,96 @@ fn detect_profile() -> ChipProfile {
     }
 }
 
-fn kind_for_core(profile: &ChipProfile, idx: u32) -> CoreKind {
+/// Query the OS's real per-core Efficiency Class via
+/// `GetLogicalProcessorInformationEx(RelationProcessorCore)`, keyed by
+/// logical core index (bit position in the group affinity mask). `None` if
+/// the API call fails, the topology spans more than one processor group
+/// (not expected — every known Snapdragon X/X2 SKU has far fewer than the
+/// 64 logical cores a single group holds), or any index in
+/// `0..logical_cores` was left unaccounted for by the returned entries.
+fn query_core_efficiency_classes(logical_cores: u32) -> Option<Vec<u8>> {
+    unsafe {
+        let mut len: u32 = 0;
+        // Size probe: expected to return an error while still filling `len`
+        // with the required buffer size.
+        let _ = GetLogicalProcessorInformationEx(RelationProcessorCore, None, &mut len);
+        if len == 0 {
+            return None;
+        }
+
+        let mut buf: Vec<u8> = vec![0u8; len as usize];
+        let ptr = buf.as_mut_ptr() as *mut SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX;
+        GetLogicalProcessorInformationEx(RelationProcessorCore, Some(ptr), &mut len).ok()?;
+
+        // The buffer is a run of variable-length entries; `Size` on each one
+        // is the only reliable way to find the next entry's offset.
+        let mut classes = vec![0u8; logical_cores as usize];
+        let mut seen = vec![false; logical_cores as usize];
+        let mut offset = 0usize;
+        while offset < buf.len() {
+            let entry =
+                &*(buf.as_ptr().add(offset) as *const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX);
+            let entry_size = entry.Size as usize;
+            if entry_size == 0 {
+                break; // malformed; stop rather than looping forever
+            }
+            let proc = &entry.Anonymous.Processor;
+            if proc.GroupCount == 1 {
+                let mask = proc.GroupMask[0].Mask;
+                for bit in 0..(logical_cores as usize).min(usize::BITS as usize) {
+                    if (mask >> bit) & 1 == 1 {
+                        classes[bit] = proc.EfficiencyClass;
+                        seen[bit] = true;
+                    }
+                }
+            }
+            offset += entry_size;
+        }
+
+        if seen.iter().all(|s| *s) {
+            Some(classes)
+        } else {
+            None
+        }
+    }
+}
+
+/// Maps each core's raw EfficiencyClass byte (in core-index order) to a P/E
+/// `CoreKind`: cores at the highest class present become `Performance`,
+/// every lower class becomes `Efficiency`. A single distinct class
+/// (homogeneous chip — X1 Elite, X2P-42) maps everything to `Performance`.
+fn classes_to_kinds(classes: &[u8]) -> Vec<CoreKind> {
+    let max = classes.iter().copied().max().unwrap_or(0);
+    classes
+        .iter()
+        .map(|&c| {
+            if c == max {
+                CoreKind::Performance
+            } else {
+                CoreKind::Efficiency
+            }
+        })
+        .collect()
+}
+
+/// Real per-core P/E classification straight from the OS topology API.
+/// `None` falls back to the positional walk over the static profile's
+/// `clusters` table in `kind_for_core` below — see issue #2: a screenshot
+/// relayed on that issue suggested X2 enumerates Efficiency cores before
+/// Performance ones, the opposite of every X1 profile's static table, but
+/// that evidence is secondhand and not solid enough to hardcode. Querying
+/// the live topology sidesteps needing to guess the enumeration order for
+/// any given chip at all.
+fn real_core_kinds(logical_cores: u32) -> Option<Vec<CoreKind>> {
+    query_core_efficiency_classes(logical_cores).map(|classes| classes_to_kinds(&classes))
+}
+
+fn kind_for_core(real_kinds: &Option<Vec<CoreKind>>, profile: &ChipProfile, idx: u32) -> CoreKind {
+    if let Some(kinds) = real_kinds {
+        if let Some(k) = kinds.get(idx as usize) {
+            return *k;
+        }
+    }
     let mut cursor = 0u32;
     for (kind, n) in profile.clusters {
         cursor += n;
@@ -301,6 +393,7 @@ type TempStats = Option<(f64, f64, f64, u64)>;
 fn build_snapshot(
     q: &Query,
     profile: &ChipProfile,
+    real_kinds: &Option<Vec<CoreKind>>,
     stats: &mut CoreStats,
     temp_stats: &mut TempStats,
 ) -> SensorSnapshot {
@@ -379,7 +472,7 @@ fn build_snapshot(
         let s = stats.get(&i);
         cores_out.push(CoreReading {
             index: i,
-            kind: kind_for_core(profile, i),
+            kind: kind_for_core(real_kinds, profile, i),
             load,
             load_min: s.map(|s| s.0),
             load_max: s.map(|s| s.1),
@@ -433,6 +526,7 @@ fn build_snapshot(
 
 fn worker(rx: mpsc::Receiver<Request>) {
     let profile = detect_profile();
+    let real_kinds = real_core_kinds(logical_core_count());
     let mut stats: CoreStats = HashMap::new();
     let mut temp_stats: TempStats = None;
     let mut query: Option<Query> = None;
@@ -447,7 +541,7 @@ fn worker(rx: mpsc::Receiver<Request>) {
                     query = open_query().ok();
                 }
                 let result = match &query {
-                    Some(q) => Ok(build_snapshot(q, &profile, &mut stats, &mut temp_stats)),
+                    Some(q) => Ok(build_snapshot(q, &profile, &real_kinds, &mut stats, &mut temp_stats)),
                     None => Err(anyhow::anyhow!("PDH query not open")),
                 };
                 if result.is_err() {
@@ -458,5 +552,38 @@ fn worker(rx: mpsc::Receiver<Request>) {
                 let _ = reply.send(result);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classes_to_kinds_two_tier_highest_class_is_performance() {
+        // X2E-78-100 real topology per issue #2: 6 x Oryon P1 (efficiency
+        // class 0) + 6 x Oryon P2 (efficiency class 1) — order in the raw
+        // class list doesn't matter, only which class is highest.
+        let classes = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1];
+        let kinds = classes_to_kinds(&classes);
+        assert_eq!(kinds[..6], [CoreKind::Efficiency; 6]);
+        assert_eq!(kinds[6..], [CoreKind::Performance; 6]);
+    }
+
+    #[test]
+    fn classes_to_kinds_homogeneous_is_all_performance() {
+        // X1 Elite / X2P-42: a single Efficiency Class for every core.
+        let classes = [0u8; 8];
+        let kinds = classes_to_kinds(&classes);
+        assert!(kinds.iter().all(|k| *k == CoreKind::Performance));
+    }
+
+    #[test]
+    fn classes_to_kinds_three_tier_only_top_class_is_performance() {
+        // Hypothetical 3-tier topology: everything below the max class is
+        // Efficiency, not just the immediately-lower tier.
+        let classes = [0, 1, 2];
+        let kinds = classes_to_kinds(&classes);
+        assert_eq!(kinds, [CoreKind::Efficiency, CoreKind::Efficiency, CoreKind::Performance]);
     }
 }

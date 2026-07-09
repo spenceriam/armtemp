@@ -23,6 +23,26 @@ body,
   font-size: 12px;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+  touch-action: pan-x pan-y;
+}
+
+/* Native apps don't let you drag-select arbitrary chrome text; text inputs
+   are the exception. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* No browser-style image drag-ghost. */
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
 }
 
 .app-root {
@@ -81,7 +101,7 @@ body,
   color: var(--text);
   font: inherit;
   padding: 4px 9px;
-  cursor: pointer;
+  cursor: default;
 }
 .menu-top:hover,
 .menu-top.open {
@@ -110,7 +130,7 @@ body,
   color: var(--text);
   font: inherit;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
 }
 .menu-entry:hover {
   background: var(--accent);
@@ -138,7 +158,7 @@ body,
   background: transparent;
   border: none;
   font-size: 15px;
-  cursor: pointer;
+  cursor: default;
 }
 .win-btn:hover {
   background: var(--hover);
@@ -491,7 +511,7 @@ body,
   border: 1px solid var(--border-2);
   border-bottom: none;
   padding: 4px 10px;
-  cursor: pointer;
+  cursor: default;
   position: relative;
   top: 1px;
 }
@@ -519,7 +539,7 @@ body,
   gap: 7px;
   padding: 3px 2px;
   font-size: 11.5px;
-  cursor: pointer;
+  cursor: default;
   -webkit-user-select: none;
   user-select: none;
 }
@@ -611,7 +631,7 @@ body,
   color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--border-2);
-  cursor: pointer;
+  cursor: default;
 }
 .btn:hover {
   background: var(--hover);

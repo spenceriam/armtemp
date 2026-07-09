@@ -15,7 +15,7 @@ use windows::Win32::Graphics::Gdi::{
     CreateCompatibleDC, CreateDIBSection, CreateFontW, DeleteDC, DeleteObject, DrawTextW,
     GdiFlush, GetTextExtentPoint32W, SelectObject, SetBkMode, SetTextColor, ANTIALIASED_QUALITY,
     BITMAPINFO, BI_RGB, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DEFAULT_PITCH, DIB_RGB_COLORS,
-    DT_CENTER, DT_SINGLELINE, DT_VCENTER, FF_DONTCARE, FW_MEDIUM, HFONT, OUT_DEFAULT_PRECIS,
+    DT_CENTER, DT_SINGLELINE, DT_VCENTER, FF_DONTCARE, FW_BOLD, FW_MEDIUM, HFONT, OUT_DEFAULT_PRECIS,
     TRANSPARENT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSMICON};
@@ -31,14 +31,21 @@ pub fn tray_icon_size() -> u32 {
 /// 2-3 digit values and a leading minus sign fit. `fg` colors the glyph;
 /// `plate` optionally draws a background plate (reusing the Rounded/Badge
 /// plate math from `sensors::tray`) beneath it. Returns an all-transparent
-/// buffer if any GDI call fails — never panics.
+/// buffer if any GDI call fails — never panics. `bold` selects the tray
+/// font weight (Bold vs. the default Medium — see `create_font`). `degree`
+/// draws a small superscript `°` in a thin reserved column on the right
+/// instead of appending it to `text` — appending it as a full glyph would
+/// cost the shrink-to-fit loop ~30% of the digit size just to fit a 3rd
+/// character (see `glyph_coverage_raw`).
 pub fn render_number_rgba(
     text: &str,
     fg: (u8, u8, u8),
     plate: Option<((u8, u8, u8), TrayStyle)>,
     size: u32,
+    bold: bool,
+    degree: bool,
 ) -> Vec<u8> {
-    let coverage = glyph_coverage(text, size);
+    let coverage = glyph_coverage(text, size, bold, degree);
     let mut out = vec![0u8; (size as usize) * (size as usize) * 4];
     for y in 0..size {
         for x in 0..size {
@@ -100,9 +107,9 @@ const SUPERSAMPLE: u32 = 4;
 /// Draws `text` at native size via supersampled GDI rasterization (see
 /// `glyph_coverage_raw`) and box-filters the result down to `size`x`size`,
 /// returning per-pixel alpha coverage.
-fn glyph_coverage(text: &str, size: u32) -> Vec<u8> {
+fn glyph_coverage(text: &str, size: u32, bold: bool, degree: bool) -> Vec<u8> {
     let hi_size = size * SUPERSAMPLE;
-    let hi = glyph_coverage_raw(text, hi_size, (6 * SUPERSAMPLE) as i32);
+    let hi = glyph_coverage_raw(text, hi_size, (6 * SUPERSAMPLE) as i32, bold, degree);
     downsample_box(&hi, hi_size, size)
 }
 
@@ -135,9 +142,23 @@ fn downsample_box(src: &[u8], src_size: u32, dst_size: u32) -> Vec<u8> {
 /// white-text antialiasing coverage IS the pixel's gray level, and R=G=B for
 /// true gray). Returns an all-zero (fully transparent) buffer on any GDI
 /// failure.
-fn glyph_coverage_raw(text: &str, size: u32, min_px_h: i32) -> Vec<u8> {
+///
+/// When `degree` is set, the digits are shrink-to-fit into a narrower column
+/// (`size` minus a thin reserved strip on the right, `DEGREE_RESERVE_PCT` of
+/// `size`) instead of the full width, and a `°` is drawn separately into that
+/// reserved strip at roughly half the digit height, top-aligned with the
+/// digits' top edge — like a superscript. This costs the digits only that
+/// thin strip (a ~1px shrink at native tray size) instead of the ~30% they'd
+/// lose if `°` were appended as a 3rd full-width glyph.
+fn glyph_coverage_raw(text: &str, size: u32, min_px_h: i32, bold: bool, degree: bool) -> Vec<u8> {
+    const DEGREE_RESERVE_PCT: u32 = 22;
     let mut coverage = vec![0u8; (size as usize) * (size as usize)];
     let utf16: Vec<u16> = text.encode_utf16().collect();
+    let digit_width = if degree {
+        size.saturating_sub(size * DEGREE_RESERVE_PCT / 100)
+    } else {
+        size
+    };
     unsafe {
         let dc = CreateCompatibleDC(None);
         if dc.is_invalid() {
@@ -163,7 +184,7 @@ fn glyph_coverage_raw(text: &str, size: u32, min_px_h: i32) -> Vec<u8> {
         let old_bitmap = SelectObject(dc, bitmap);
 
         let mut px_h = (size as i32 * 9 / 10).max(min_px_h);
-        let mut font = create_font(px_h);
+        let mut font = create_font(px_h, bold);
         let old_font = SelectObject(dc, font);
         SetBkMode(dc, TRANSPARENT);
         let _ = SetTextColor(dc, COLORREF(0x00FF_FFFF));
@@ -171,19 +192,44 @@ fn glyph_coverage_raw(text: &str, size: u32, min_px_h: i32) -> Vec<u8> {
         loop {
             let mut extent = SIZE::default();
             let _ = GetTextExtentPoint32W(dc, &utf16, &mut extent);
-            if extent.cx <= (size as i32 - 1) || px_h <= min_px_h {
+            if extent.cx <= (digit_width as i32 - 1) || px_h <= min_px_h {
                 break;
             }
             SelectObject(dc, old_font);
             let _ = DeleteObject(font);
             px_h -= 1;
-            font = create_font(px_h);
+            font = create_font(px_h, bold);
             SelectObject(dc, font);
         }
 
-        let mut rect = RECT { left: 0, top: 0, right: size as i32, bottom: size as i32 };
+        let mut rect = RECT { left: 0, top: 0, right: digit_width as i32, bottom: size as i32 };
         let mut draw_buf = utf16.clone();
         DrawTextW(dc, &mut draw_buf, &mut rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+        // Deselect and free the digit font before drawing the degree mark —
+        // GDI disallows deleting a font while it's still selected into the DC.
+        SelectObject(dc, old_font);
+        let _ = DeleteObject(font);
+
+        if degree {
+            let deg_px_h = (px_h / 2).max((4 * SUPERSAMPLE) as i32);
+            let deg_font = create_font(deg_px_h, bold);
+            SelectObject(dc, deg_font);
+
+            let digit_top = ((size as i32) - px_h) / 2;
+            let mut deg_rect = RECT {
+                left: digit_width as i32,
+                top: digit_top,
+                right: size as i32,
+                bottom: digit_top + deg_px_h,
+            };
+            let mut deg_buf: Vec<u16> = "°".encode_utf16().collect();
+            DrawTextW(dc, &mut deg_buf, &mut deg_rect, DT_CENTER | DT_SINGLELINE);
+
+            SelectObject(dc, old_font);
+            let _ = DeleteObject(deg_font);
+        }
+
         let _ = GdiFlush();
 
         let px_count = (size as usize) * (size as usize);
@@ -192,8 +238,6 @@ fn glyph_coverage_raw(text: &str, size: u32, min_px_h: i32) -> Vec<u8> {
             coverage[i] = bgra[i * 4 + 2]; // BGRA -> R channel == AA coverage (gray)
         }
 
-        SelectObject(dc, old_font);
-        let _ = DeleteObject(font);
         SelectObject(dc, old_bitmap);
         let _ = DeleteObject(bitmap);
         let _ = DeleteDC(dc);
@@ -201,14 +245,15 @@ fn glyph_coverage_raw(text: &str, size: u32, min_px_h: i32) -> Vec<u8> {
     coverage
 }
 
-fn create_font(px_height: i32) -> HFONT {
+fn create_font(px_height: i32, bold: bool) -> HFONT {
+    let weight = if bold { FW_BOLD.0 } else { FW_MEDIUM.0 };
     unsafe {
         CreateFontW(
             -px_height,
             0,
             0,
             0,
-            FW_MEDIUM.0 as i32,
+            weight as i32,
             0,
             0,
             0,

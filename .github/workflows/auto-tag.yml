@@ -1,0 +1,44 @@
+name: Auto tag release
+
+# Merging a version bump to main (a change to tauri.conf.json's "version")
+# creates the matching v-tag and kicks off release.yml — so shipping is just
+# "merge the bump PR", not a separate manual tag push.
+#
+# A tag created with the default GITHUB_TOKEN does NOT trigger other
+# workflows' `on: push: tags` (GitHub suppresses that to avoid accidental
+# recursion), so this dispatches release.yml directly via `gh workflow run`
+# instead of relying on the tag push itself to fire it. Manual tag pushes and
+# manual workflow_dispatch on release.yml keep working unchanged.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src-tauri/tauri.conf.json
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: v
+        run: echo "version=$(jq -r .version src-tauri/tauri.conf.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag and dispatch release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.v.outputs.version }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists — nothing to do."
+            exit 0
+          fi
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "$TAG"
+          gh workflow run release.yml --ref "refs/tags/$TAG"

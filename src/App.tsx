@@ -22,6 +22,11 @@ export default function App() {
   const { settings, update, loaded } = useSettings();
   const { snap, status: sensorStatus } = useSensors();
   const [mini, setMini] = useState(false);
+  // Keep the tray menu's "Mini-mode" checkmark in sync no matter where mini
+  // mode is toggled from (tray menu or Options → Toggle Mini Mode).
+  useEffect(() => {
+    invoke("set_mini_state", { mini }).catch(() => {});
+  }, [mini]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [overheatOpen, setOverheatOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);

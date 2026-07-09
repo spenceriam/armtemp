@@ -1,0 +1,43 @@
+name: PR CI
+
+# Validates every PR against main: frontend typecheck/build, then a native
+# aarch64 clippy + test pass. Nothing else in this repo compiles PRs today —
+# without this, broken code can merge and only surfaces when someone cuts a
+# release tag.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Must run before the cargo steps: `tauri::generate_context!` embeds
+      # `../dist` (frontendDist) at compile time.
+      - name: Build frontend
+        run: npm run build
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc
+          components: clippy
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets
+
+      - name: Test
+        run: cargo test --manifest-path src-tauri/Cargo.toml
