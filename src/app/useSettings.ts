@@ -58,6 +58,16 @@ export function useSettings() {
           if (actuallyEnabled !== merged.startWithWindows) {
             merged.startWithWindows = actuallyEnabled;
             await s.set("startWithWindows", actuallyEnabled);
+          } else if (actuallyEnabled) {
+            // Self-heal: re-write the registry Run entry with the CURRENT
+            // exe path even though the enabled/disabled state already
+            // matches. `isEnabled()` only checks that the value exists, not
+            // that it points at this install — an install-location change
+            // (e.g. the 0.4.3 MSI → 0.4.4 NSIS migration, Program Files ->
+            // %LOCALAPPDATA%) leaves a stale path behind: the toggle shows
+            // on, but autostart silently does nothing on next logon.
+            // Idempotent, so this is safe to run on every launch.
+            await autostartEnable();
           }
         } catch (e) {
           console.warn("autostart reconcile failed", e);

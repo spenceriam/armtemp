@@ -1,11 +1,9 @@
-# Build native ARM64 ARMtemp installers (MSI + NSIS) for local testing.
+# Build the native ARM64 ARMtemp NSIS installer for local testing.
 # Usage:  pwsh -File tools/build-installer.ps1
 #         pwsh -File tools/build-installer.ps1 -SkipInstall   # skip npm install
-#         pwsh -File tools/build-installer.ps1 -NsisOnly      # NSIS setup.exe only
 
 param(
-    [switch]$SkipInstall,
-    [switch]$NsisOnly
+    [switch]$SkipInstall
 )
 
 $ErrorActionPreference = 'Stop'
@@ -77,17 +75,14 @@ If you just installed VS Build Tools, reboot Windows first — the installer oft
 Write-Host ('MSVC:    {0}' -f (Get-Command link.exe).Source)
 
 if (-not $SkipInstall) {
-    Write-Host '`nInstalling frontend dependencies...' -ForegroundColor Yellow
+    Write-Host ''
+    Write-Host 'Installing frontend dependencies...' -ForegroundColor Yellow
     npm install
 }
 
-if ($NsisOnly) {
-    Write-Host '`nBuilding NSIS installer only...' -ForegroundColor Yellow
-    npm run tauri build -- --bundles nsis
-} else {
-    Write-Host '`nBuilding MSI + NSIS installers...' -ForegroundColor Yellow
-    npm run tauri build
-}
+Write-Host ''
+Write-Host 'Building NSIS installer...' -ForegroundColor Yellow
+npm run tauri build
 
 $bundleRoot = Join-Path $root 'src-tauri\target\release\bundle'
 $exe = Join-Path $root 'src-tauri\target\release\armtemp.exe'
@@ -104,16 +99,16 @@ if ($machine -ne 0xAA64) {
     throw ('Expected ARM64 (0xAA64) binary, got machine type 0x{0:X4}' -f $machine)
 }
 
-Write-Host '`n== Build outputs ==' -ForegroundColor Green
+Write-Host ''
+Write-Host '== Build outputs ==' -ForegroundColor Green
 Write-Host ('EXE:  {0} ({1:N2} MB, ARM64)' -f $exe, ($bytes.Length / 1MB))
 
-foreach ($kind in @('msi', 'nsis')) {
-    $dir = Join-Path $bundleRoot $kind
-    if (Test-Path $dir) {
-        Get-ChildItem $dir -File | ForEach-Object {
-            Write-Host ('{0}: {1} ({2:N2} MB)' -f ($kind.ToUpper()), $_.FullName, ($_.Length / 1MB))
-        }
+$nsisDir = Join-Path $bundleRoot 'nsis'
+if (Test-Path $nsisDir) {
+    Get-ChildItem $nsisDir -File | ForEach-Object {
+        Write-Host ('NSIS: {0} ({1:N2} MB)' -f $_.FullName, ($_.Length / 1MB))
     }
 }
 
-Write-Host '`nTo install locally, run the NSIS setup.exe or double-click the MSI.' -ForegroundColor Cyan
+Write-Host ''
+Write-Host 'To install locally, run the NSIS setup.exe.' -ForegroundColor Cyan

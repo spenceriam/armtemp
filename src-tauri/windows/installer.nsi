@@ -47,6 +47,29 @@
 ;     icon cache can then serve a blank/broken icon after repeated
 ;     reinstalls. Section Install also fires SHChangeNotify so Explorer
 ;     picks up the change immediately instead of showing stale cached icons.
+;   - Section Install now silently finds+kills a running ARMtemp up front
+;     (nsis_tauri_utils::FindProcess/KillProcess) instead of relying solely
+;     on the stock CheckIfAppIsRunning prompt — see the comment at the top
+;     of Section Install. ARMtemp autostarts, so it's running on nearly
+;     every upgrade; the stock "Click OK to kill it" modal fired constantly.
+;   - New $ExistingInstall flag (see DetectExpressUpgrade /
+;     SkipIfPassiveOrNotFresh): set whenever ANY existing install (any
+;     version, or a prior WiX/MSI install) is detected, not just an
+;     older-version express upgrade. The Welcome and Directory pages are now
+;     skipped whenever $ExistingInstall = 1, so the "Already Installed"
+;     maintenance/reinstall page is always the first thing shown on a
+;     machine that already has ARMtemp installed.
+;   - Removed MUI_FINISHPAGE_NOAUTOCLOSE: a successful install now
+;     auto-advances straight to the Finish page instead of requiring an
+;     extra manual "Next" click after the progress page. A failed install
+;     still stops on the progress/log page regardless (NSIS only auto-closes
+;     on success), so debuggability is unaffected.
+;   - Choosing "Uninstall ARMtemp" on the same-version maintenance page now
+;     also removes the leftover uninstall.exe + install directory from the
+;     parent process afterward — the child uninstaller runs in-place
+;     (`_?=`) and cannot delete itself, so stock behavior left an empty
+;     shell (uninstall.exe + folder) behind even though the Apps list entry
+;     was gone.
 
 Unicode true
 ManifestDPIAware true
@@ -127,6 +150,9 @@ Var WixMode
 Var OldMainBinaryName
 ; ARMtemp: see DetectExpressUpgrade.
 Var ExpressUpgrade
+; ARMtemp: set whenever ANY existing install is detected (any version, or a
+; prior WiX/MSI install) — see DetectExpressUpgrade / SkipIfPassiveOrNotFresh.
+Var ExistingInstall
 ; ARMtemp: set when the same-version maintenance page's "Uninstall" choice is
 ; selected — see PageLeaveReinstall / the Quit right before reinst_done.
 Var UninstallOnly
@@ -221,8 +247,10 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 
 ; Installer pages, must be ordered as they appear
 ; 1. Welcome Page
-; ARMtemp: also skip on an express upgrade (see DetectExpressUpgrade), not just passive mode.
-!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassiveOrExpressUpgrade
+; ARMtemp: also skip whenever any existing install is detected (see
+; DetectExpressUpgrade), not just passive mode — the maintenance/reinstall
+; page below is a better first page for a machine that already has ARMtemp.
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassiveOrNotFresh
 !insertmacro MUI_PAGE_WELCOME
 
 ; 2. License Page (if defined)
@@ -489,6 +517,14 @@ Function PageLeaveReinstall
     ; ARMtemp: same-version "Uninstall ARMtemp" is a terminal action — the
     ; app is gone; don't fall through to Section Install and reinstall it.
     ${If} $UninstallOnly = 1
+      ; The child uninstaller above ran in-place (_?=$4) so it could report
+      ; its exit code back to us, but that means it can't delete its own
+      ; uninstall.exe or the now-empty install directory. Stock behavior
+      ; left both behind even though the Apps & Features entry was gone —
+      ; clean them up from this (parent) process. Non-destructive: if the
+      ; user has other files in $4, RMDir (no /r) leaves the folder in place.
+      Delete "$4\uninstall.exe"
+      RMDir "$4"
       SetAutoClose true
       Quit
     ${EndIf}
@@ -496,9 +532,11 @@ Function PageLeaveReinstall
 FunctionEnd
 
 ; 5. Choose install directory page
-; ARMtemp: also skip on an express upgrade — the install dir is already
-; recorded from the existing install (RestorePreviousInstallLocation).
-!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassiveOrExpressUpgrade
+; ARMtemp: also skip whenever any existing install is detected — the install
+; dir is already recorded from the existing install
+; (RestorePreviousInstallLocation), and re-showing a directory picker on a
+; Repair/reinstall/uninstall maintenance run is pointless.
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassiveOrNotFresh
 !insertmacro MUI_PAGE_DIRECTORY
 
 ; 6. Start menu shortcut page
@@ -516,9 +554,11 @@ Var AppStartMenuFolder
 
 ; 8. Finish page
 ;
-; Don't auto jump to finish page after installation page,
-; because the installation page has useful info that can be used debug any issues with the installer.
-!define MUI_FINISHPAGE_NOAUTOCLOSE
+; ARMtemp: stock Tauri sets MUI_FINISHPAGE_NOAUTOCLOSE here so the
+; installation page always requires a manual "Next" click before Finish,
+; even on success (so its log stays visible for debugging). We instead let a
+; successful install auto-advance straight to Finish — NSIS only auto-closes
+; on success, so a failed install still stops on the log page for debugging.
 ; Use show readme button in the finish page as a button create a desktop shortcut
 !define MUI_FINISHPAGE_SHOWREADME
 !define MUI_FINISHPAGE_SHOWREADME_TEXT "$(createDesktop)"
@@ -773,6 +813,28 @@ Section Install
   !ifmacrodef NSIS_HOOK_PREINSTALL
     !insertmacro NSIS_HOOK_PREINSTALL
   !endif
+
+  ; ARMtemp: running Setup (or choosing Repair) IS the consent to close the
+  ; app — a tray temperature monitor has no unsaved data to lose. Kill it
+  ; silently instead of letting the stock CheckIfAppIsRunning below pop its
+  ; "Click OK to kill it" modal on every single upgrade (ARMtemp autostarts,
+  ; so it's running almost every time Setup runs). The stock macro remains
+  ; right after as a fallback if this silent kill fails or races.
+  !if "${INSTALLMODE}" == "currentUser"
+    nsis_tauri_utils::FindProcessCurrentUser "${MAINBINARYNAME}.exe"
+  !else
+    nsis_tauri_utils::FindProcess "${MAINBINARYNAME}.exe"
+  !endif
+  Pop $R0
+  ${If} $R0 = 0
+    !if "${INSTALLMODE}" == "currentUser"
+      nsis_tauri_utils::KillProcessCurrentUser "${MAINBINARYNAME}.exe"
+    !else
+      nsis_tauri_utils::KillProcess "${MAINBINARYNAME}.exe"
+    !endif
+    Pop $R0
+    Sleep 500
+  ${EndIf}
 
   !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
 
@@ -1048,27 +1110,35 @@ Function un.SkipIfPassive
   ${IfThen} $PassiveMode = 1  ${|} Abort ${|}
 FunctionEnd
 
-; ARMtemp: skip a page when passive OR when this is a plain express upgrade
-; from an older version (see DetectExpressUpgrade). Used only for the Welcome
-; and Directory pages — the Finish page deliberately keeps using the plain
-; SkipIfPassive above so it still shows (with progress already done and the
-; "Run ARMtemp" checkbox) for express upgrades.
-Function SkipIfPassiveOrExpressUpgrade
+; ARMtemp: skip a page when passive, OR when any existing install is
+; detected ($ExistingInstall — see DetectExpressUpgrade). Used only for the
+; Welcome and Directory pages — the Finish page deliberately keeps using the
+; plain SkipIfPassive above so it still shows (with progress already done
+; and the "Run ARMtemp" checkbox) whenever the maintenance page auto-resolves
+; without ever being shown (express upgrade).
+Function SkipIfPassiveOrNotFresh
   ${IfThen} $PassiveMode = 1  ${|} Abort ${|}
-  ${IfThen} $ExpressUpgrade = 1  ${|} Abort ${|}
+  ${IfThen} $ExistingInstall = 1  ${|} Abort ${|}
 FunctionEnd
 
 ; ARMtemp: cheap up-front check (runs in .onInit, before any page is shown)
-; for whether this run should be treated as a plain express upgrade:
-;   - a prior WiX/MSI install is present (its removal is unconditional
-;     regardless of user choice — see PageLeaveReinstall's $WixMode branch —
-;     so there is nothing to ask), or
-;   - a strictly OLDER NSIS-installed version is present.
-; Same-version reinstalls and downgrades are NOT express upgrades — they keep
-; the interactive choice page (repurposed as a Repair/Uninstall maintenance
-; page for same-version, and the existing downgrade guard otherwise).
+; that sets two flags:
+;   - $ExistingInstall: ANY existing install is present (any version, or a
+;     prior WiX/MSI install) — used to skip the Welcome/Directory pages so
+;     the "Already Installed" maintenance page is always shown first.
+;   - $ExpressUpgrade: a stricter subset of the above — a prior WiX/MSI
+;     install (its removal is unconditional regardless of user choice — see
+;     PageLeaveReinstall's $WixMode branch — so there is nothing to ask), or
+;     a strictly OLDER NSIS-installed version is present. This auto-resolves
+;     the maintenance page itself (skips showing it) straight to the
+;     in-place-update path. Same-version reinstalls and downgrades are NOT
+;     express upgrades — they keep the interactive maintenance page
+;     (repurposed as a Repair/Uninstall choice for same-version, and the
+;     existing downgrade guard otherwise) even though $ExistingInstall = 1
+;     still skips Welcome/Directory for them.
 Function DetectExpressUpgrade
   StrCpy $ExpressUpgrade 0
+  StrCpy $ExistingInstall 0
 
   StrCpy $0 0
   detect_wix_loop:
@@ -1083,6 +1153,7 @@ Function DetectExpressUpgrade
     ${StrLoc} $R0 $R1 "msiexec" ">"
     StrCmp $R0 0 0 detect_wix_loop_done
     StrCpy $ExpressUpgrade 1
+    StrCpy $ExistingInstall 1
     Return
   detect_wix_loop_done:
 
@@ -1093,6 +1164,11 @@ Function DetectExpressUpgrade
   ReadRegStr $R0 SHCTX "${UNINSTKEY}" ""
   ReadRegStr $R1 SHCTX "${UNINSTKEY}" "UninstallString"
   ${IfThen} "$R0$R1" == "" ${|} Return ${|}
+
+  ; An existing NSIS install of any version (same/upgrade/downgrade) was
+  ; found — skip Welcome/Directory even though it may not qualify below as a
+  ; full express upgrade (e.g. same version or a downgrade).
+  StrCpy $ExistingInstall 1
 
   ReadRegStr $R0 SHCTX "${UNINSTKEY}" "DisplayVersion"
   ${IfThen} $R0 == "" ${|} Return ${|}
