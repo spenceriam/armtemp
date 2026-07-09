@@ -1,7 +1,7 @@
 {
   "name": "armtemp",
   "private": true,
-  "version": "0.4.4",
+  "version": "0.4.5",
   "type": "module",
   "description": "Native Snapdragon X / X2 temperature monitor for Windows on ARM",
   "scripts": {

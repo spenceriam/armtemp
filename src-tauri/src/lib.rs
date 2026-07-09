@@ -228,6 +228,17 @@ fn exit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// Plain-text dump of every raw CPU identity signal plus how the chip was
+/// matched — see issue #2, where the only way to diagnose a misdetected
+/// machine we don't own was asking the reporter for more screenshots.
+#[tauri::command]
+fn get_detection_report(state: tauri::State<'_, Arc<AppState>>) -> String {
+    state
+        .provider
+        .detection_report()
+        .unwrap_or_else(|e| format!("detection report unavailable: {e}"))
+}
+
 /// Keeps the tray menu's "Mini-mode" checkmark honest. Mini mode is ephemeral
 /// UI state (not persisted settings), so the frontend reports it here on
 /// every toggle rather than routing it through `update_settings`.
@@ -609,8 +620,9 @@ pub fn run() {
             let provider = PdhProvider::new();
             let profile = provider.profile().ok().flatten();
             eprintln!(
-                "[armtemp] detected: {}",
-                profile.as_ref().map(|p| p.name).unwrap_or("unknown")
+                "[armtemp] detected: {} {}",
+                profile.as_ref().map(|p| p.name).unwrap_or("unknown"),
+                profile.as_ref().map(|p| p.model).unwrap_or("")
             );
             let state = Arc::new(AppState {
                 provider,
@@ -694,7 +706,8 @@ pub fn run() {
             refresh_now,
             update_settings,
             exit_app,
-            set_mini_state
+            set_mini_state,
+            get_detection_report
         ])
         .run(tauri::generate_context!())
         .expect("error while running ARMtemp");

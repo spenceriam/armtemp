@@ -22,14 +22,14 @@ use windows::Win32::System::Performance::{
     PdhGetFormattedCounterValue, PdhOpenQueryW, PDH_FMT_COUNTERVALUE, PDH_FMT_COUNTERVALUE_ITEM_W,
     PDH_FMT_DOUBLE,
 };
-use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
 use windows::Win32::System::SystemInformation::{
     GetLogicalProcessorInformationEx, GetSystemInfo, RelationProcessorCore,
     SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX,
 };
 use windows::core::PCWSTR;
 
-use crate::sensors::chips::{match_profile, ChipProfile};
+use crate::sensors::chips::{match_profile, ChipProfile, Detection, MatchBasis};
+use crate::sensors::identity::{self, CpuIdentity};
 use crate::sensors::types::{
     kelvin_tenths_to_c, CoreKind, CoreReading, SensorSnapshot, ZoneReading, VALID_ZONE_MIN_KELVIN,
 };
@@ -44,6 +44,7 @@ const PDH_MORE_DATA: u32 = 0x800007D2;
 enum Request {
     Snapshot(mpsc::Sender<anyhow::Result<SensorSnapshot>>),
     Profile(mpsc::Sender<Option<ChipProfile>>),
+    DetectionReport(mpsc::Sender<String>),
 }
 
 /// Handle to the PDH-backed provider. Cheap to clone; all real work happens on
@@ -87,6 +88,18 @@ impl PdhProvider {
         rrx.recv()
             .map_err(|_| anyhow::anyhow!("pdh worker thread is gone"))?
     }
+
+    /// A plain-text dump of every raw identity signal + how the chip was
+    /// matched — for the Tools menu's "Copy detection report" (see issue #2:
+    /// this is how a reporter can hand over one paste instead of screenshots).
+    pub fn detection_report(&self) -> anyhow::Result<String> {
+        let (rtx, rrx) = mpsc::channel();
+        self.tx
+            .send(Request::DetectionReport(rtx))
+            .map_err(|_| anyhow::anyhow!("pdh worker thread is gone"))?;
+        rrx.recv()
+            .map_err(|_| anyhow::anyhow!("pdh worker thread is gone"))
+    }
 }
 
 // ---------- worker thread: owns all PDH handles ----------
@@ -100,10 +113,20 @@ struct Query {
     /// not expose it, in which case `throttled` degrades to `false`.
     zone_passive: Option<isize>,
     core_load: isize,
-    /// `\Processor Information(_Total)\Processor Frequency` — a genuinely
-    /// live value (unlike `Win32_Processor.CurrentClockSpeed`, which mirrors
-    /// the static max on this firmware).
+    /// `\Processor Information(_Total)\Processor Frequency` — fallback Speed
+    /// source when the per-core formula below isn't available. On a
+    /// heterogeneous P/E chip this is a blended average across clusters (see
+    /// issue #2: it under-reports a busy Prime cluster whenever the
+    /// Efficiency cluster is idle), so `perf_pct` is preferred whenever it's
+    /// present.
     freq: isize,
+    /// `% Processor Performance` per core — this tick's utilization relative
+    /// to that core's OWN nominal/rated frequency; can exceed 100% under
+    /// boost. Combined with `CpuIdentity::per_core_mhz` (that same core's
+    /// rated clock) this reproduces Task Manager's documented Speed formula,
+    /// correctly per-cluster on heterogeneous chips. Optional — some
+    /// firmware may not expose it.
+    perf_pct: Option<isize>,
 }
 
 impl Drop for Query {
@@ -135,7 +158,8 @@ fn open_query() -> anyhow::Result<Query> {
         }
 
         // If a required counter fails to add, bail out entirely (retried next
-        // tick); the optional passive-limit counter degrades gracefully.
+        // tick); the optional passive-limit/perf-performance counters
+        // degrade gracefully.
         let result = (|| -> anyhow::Result<Query> {
             let zone_temp = add_counter(hquery, r"\Thermal Zone Information(*)\Temperature")?;
             let zone_hp_temp =
@@ -144,6 +168,7 @@ fn open_query() -> anyhow::Result<Query> {
                 add_counter(hquery, r"\Thermal Zone Information(*)\% Passive Limit").ok();
             let core_load = add_counter(hquery, r"\Processor Information(*)\% Processor Time")?;
             let freq = add_counter(hquery, r"\Processor Information(_Total)\Processor Frequency")?;
+            let perf_pct = add_counter(hquery, r"\Processor Information(*)\% Processor Performance").ok();
             Ok(Query {
                 hquery,
                 zone_temp,
@@ -151,6 +176,7 @@ fn open_query() -> anyhow::Result<Query> {
                 zone_passive,
                 core_load,
                 freq,
+                perf_pct,
             })
         })();
 
@@ -235,34 +261,6 @@ fn parse_core_index(instance_name: &str) -> Option<u32> {
     tail.trim().parse::<u32>().ok()
 }
 
-/// CPU name from the registry — no COM/PowerShell required.
-fn read_processor_name() -> Option<String> {
-    unsafe {
-        let subkey = HSTRING::from(r"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
-        let value = HSTRING::from("ProcessorNameString");
-        let mut size: u32 = 0;
-        let st = RegGetValueW(HKEY_LOCAL_MACHINE, &subkey, &value, RRF_RT_REG_SZ, None, None, Some(&mut size));
-        if st.0 != ERROR_SUCCESS || size == 0 {
-            return None;
-        }
-        let mut buf: Vec<u16> = vec![0u16; (size as usize).div_ceil(2)];
-        let st2 = RegGetValueW(
-            HKEY_LOCAL_MACHINE,
-            &subkey,
-            &value,
-            RRF_RT_REG_SZ,
-            None,
-            Some(buf.as_mut_ptr() as *mut core::ffi::c_void),
-            Some(&mut size),
-        );
-        if st2.0 != ERROR_SUCCESS {
-            return None;
-        }
-        let s = String::from_utf16_lossy(&buf);
-        Some(s.trim_end_matches('\0').trim().to_string())
-    }
-}
-
 /// Logical processor count via `GetSystemInfo` (native, no COM/PowerShell).
 /// Oryon has no SMT, so physical == logical on every known Snapdragon X SKU.
 fn logical_core_count() -> u32 {
@@ -271,14 +269,6 @@ fn logical_core_count() -> u32 {
         let mut info = SYSTEM_INFO::default();
         GetSystemInfo(&mut info);
         info.dwNumberOfProcessors.max(1)
-    }
-}
-
-fn detect_profile() -> ChipProfile {
-    let cores = logical_core_count();
-    match read_processor_name() {
-        Some(name) => match_profile(&name.to_lowercase(), cores),
-        None => match_profile("snapdragon", cores),
     }
 }
 
@@ -382,6 +372,29 @@ fn kind_for_core(real_kinds: &Option<Vec<CoreKind>>, profile: &ChipProfile, idx:
     CoreKind::Performance
 }
 
+/// Real per-cluster Speed: each core's `% Processor Performance` (this
+/// tick's utilization vs that core's OWN nominal frequency) times that
+/// core's registry `~MHz` (its cluster's rated frequency) — Task Manager's
+/// documented formula. Returns the fastest core's effective clock right now.
+/// Correct on heterogeneous P/E chips, unlike the single `_Total` average
+/// (see issue #2, where an idle Efficiency cluster dragged that average well
+/// below the Prime cluster's real running clock). `None` if either input is
+/// unavailable, so the caller can fall back to `_Total Processor Frequency`.
+fn effective_clock_mhz(perf_pct_by_core: &HashMap<u32, f64>, per_core_mhz: &[u32]) -> Option<u32> {
+    if per_core_mhz.is_empty() || perf_pct_by_core.is_empty() {
+        return None;
+    }
+    perf_pct_by_core
+        .iter()
+        .filter_map(|(idx, pct)| {
+            per_core_mhz
+                .get(*idx as usize)
+                .map(|nominal| (*pct / 100.0) * (*nominal as f64))
+        })
+        .fold(None::<f64>, |acc, v| Some(acc.map_or(v, |a| a.max(v))))
+        .map(|v| v.round() as u32)
+}
+
 /// Per-core running LOAD stats across ticks: (min, max, sum, sample_count).
 /// Load is genuinely per-core (unlike temperature — see `TempStats` below).
 type CoreStats = HashMap<u32, (f64, f64, f64, u64)>;
@@ -393,6 +406,8 @@ type TempStats = Option<(f64, f64, f64, u64)>;
 fn build_snapshot(
     q: &Query,
     profile: &ChipProfile,
+    basis: MatchBasis,
+    identity: &CpuIdentity,
     real_kinds: &Option<Vec<CoreKind>>,
     stats: &mut CoreStats,
     temp_stats: &mut TempStats,
@@ -480,10 +495,20 @@ fn build_snapshot(
         });
     }
 
-    // Live frequency: genuinely varies with load (unlike the static
-    // Win32_Processor.CurrentClockSpeed this backend replaces). `max_clock_mhz`
-    // comes from the chip profile's boost clock — informational, not live.
-    let clock_mhz = read_single(q.freq).map(|v| v.round() as u32);
+    // Live frequency: per-core `% Processor Performance` × that core's real
+    // rated `~MHz`, correct on heterogeneous P/E chips (see
+    // `effective_clock_mhz`); falls back to the `_Total` blended-average
+    // counter only if that per-core data isn't available this tick.
+    let mut perf_pct_by_core: HashMap<u32, f64> = HashMap::new();
+    if let Some(perf_pct) = q.perf_pct {
+        for (name, value) in read_array(perf_pct) {
+            if let Some(idx) = parse_core_index(&name) {
+                perf_pct_by_core.insert(idx, value);
+            }
+        }
+    }
+    let clock_mhz = effective_clock_mhz(&perf_pct_by_core, &identity.per_core_mhz)
+        .or_else(|| read_single(q.freq).map(|v| v.round() as u32));
     let base_clock_mhz = if profile.base_ghz > 0.0 {
         Some((profile.base_ghz * 1000.0).round() as u32)
     } else {
@@ -520,13 +545,58 @@ fn build_snapshot(
         max_clock_mhz,
         bus_speed_mhz: Some(100), // nominal reference clock on Snapdragon X
         power_w: None,            // confirmed empty from userspace on this firmware
+        cpu_identifier: identity.identifier.clone(),
+        detection_basis: basis.label().to_string(),
         tick: 0,
     }
 }
 
+/// Plain-text diagnostics dump: every raw identity signal plus how the chip
+/// was matched. Lets a reporter paste one block instead of screenshots.
+fn format_detection_report(identity: &CpuIdentity, profile: &ChipProfile, basis: MatchBasis) -> String {
+    format!(
+        "ARMtemp detection report\n\
+         ProcessorNameString: {}\n\
+         Identifier: {}\n\
+         VendorIdentifier: {}\n\
+         Logical cores: {}\n\
+         Per-core ~MHz: {:?}\n\
+         Real P/E topology: {} performance / {} efficiency\n\
+         --- Matched profile ---\n\
+         Name: {}\n\
+         Model: {}\n\
+         Cores: {} ({:?})\n\
+         Base/Boost: {:.2} / {:.2} GHz\n\
+         Match basis: {}\n",
+        identity.name.as_deref().unwrap_or("(none)"),
+        identity.identifier.as_deref().unwrap_or("(none)"),
+        identity.vendor.as_deref().unwrap_or("(none)"),
+        identity.logical_cores,
+        identity.per_core_mhz,
+        identity.perf_cores.map(|n| n.to_string()).unwrap_or_else(|| "?".to_string()),
+        identity.eff_cores.map(|n| n.to_string()).unwrap_or_else(|| "?".to_string()),
+        profile.name,
+        profile.model,
+        profile.total_cores(),
+        profile.clusters,
+        profile.base_ghz,
+        profile.boost_ghz,
+        basis.label(),
+    )
+}
+
 fn worker(rx: mpsc::Receiver<Request>) {
-    let profile = detect_profile();
-    let real_kinds = real_core_kinds(logical_core_count());
+    let logical = logical_core_count();
+    let real_kinds = real_core_kinds(logical);
+    let (perf_cores, eff_cores) = match &real_kinds {
+        Some(kinds) => (
+            Some(kinds.iter().filter(|k| **k == CoreKind::Performance).count() as u32),
+            Some(kinds.iter().filter(|k| **k == CoreKind::Efficiency).count() as u32),
+        ),
+        None => (None, None),
+    };
+    let cpu_identity = identity::gather(logical, perf_cores, eff_cores);
+    let Detection { profile, basis } = match_profile(&cpu_identity);
     let mut stats: CoreStats = HashMap::new();
     let mut temp_stats: TempStats = None;
     let mut query: Option<Query> = None;
@@ -536,12 +606,23 @@ fn worker(rx: mpsc::Receiver<Request>) {
             Request::Profile(reply) => {
                 let _ = reply.send(Some(profile.clone()));
             }
+            Request::DetectionReport(reply) => {
+                let _ = reply.send(format_detection_report(&cpu_identity, &profile, basis));
+            }
             Request::Snapshot(reply) => {
                 if query.is_none() {
                     query = open_query().ok();
                 }
                 let result = match &query {
-                    Some(q) => Ok(build_snapshot(q, &profile, &real_kinds, &mut stats, &mut temp_stats)),
+                    Some(q) => Ok(build_snapshot(
+                        q,
+                        &profile,
+                        basis,
+                        &cpu_identity,
+                        &real_kinds,
+                        &mut stats,
+                        &mut temp_stats,
+                    )),
                     None => Err(anyhow::anyhow!("PDH query not open")),
                 };
                 if result.is_err() {
@@ -585,5 +666,26 @@ mod tests {
         let classes = [0, 1, 2];
         let kinds = classes_to_kinds(&classes);
         assert_eq!(kinds, [CoreKind::Efficiency, CoreKind::Efficiency, CoreKind::Performance]);
+    }
+
+    #[test]
+    fn effective_clock_uses_the_fastest_core_not_a_blended_average() {
+        // Prime cluster busy at its full rated 4032 MHz; Efficiency cluster
+        // idle. The old `_Total` counter would blend these into ~3.7 GHz
+        // (issue #2's reported wrong Speed); the per-core formula must
+        // report the Prime cluster's real 4032 MHz instead.
+        let mut perf_pct = HashMap::new();
+        perf_pct.insert(0u32, 100.0); // Prime core at 100% of its own nominal
+        perf_pct.insert(6u32, 10.0); // Efficiency core mostly idle
+        let per_core_mhz = vec![4032, 4032, 4032, 4032, 4032, 4032, 3400, 3400, 3400, 3400, 3400, 3400];
+        assert_eq!(effective_clock_mhz(&perf_pct, &per_core_mhz), Some(4032));
+    }
+
+    #[test]
+    fn effective_clock_none_when_inputs_unavailable() {
+        assert_eq!(effective_clock_mhz(&HashMap::new(), &[]), None);
+        let mut perf_pct = HashMap::new();
+        perf_pct.insert(0u32, 100.0);
+        assert_eq!(effective_clock_mhz(&perf_pct, &[]), None);
     }
 }

@@ -141,11 +141,35 @@ failure described in §7.
   single CPU temperature ARMtemp displays (there is no per-core sensor to report
   individually).
 - **`Processor Information`** — `% Processor Time` per core (instances named
-  `group,core`, e.g. `0,3`) and `Processor Frequency` on `_Total` — a genuinely **live**
-  frequency, unlike `Win32_Processor.CurrentClockSpeed` (§1 note below).
-- **Registry + `GetSystemInfo`** — CPU name (`HKLM\HARDWARE\DESCRIPTION\System\
-  CentralProcessor\0\ProcessorNameString`) and logical core count, used to auto-select
-  the chip profile for labelling.
+  `group,core`, e.g. `0,3`), `% Processor Performance` per core, and `Processor
+  Frequency` on `_Total`. **Speed** is computed per-core (`% Processor Performance ×
+  that core's registry `~MHz`) and the fastest core wins — the `_Total` counter alone
+  blends both P/E clusters into a meaningless average on a heterogeneous chip (see
+  issue #2: an idle Efficiency cluster dragged a busy X2's reported Speed well below
+  its real Prime-cluster clock); `_Total` is kept only as a fallback if the per-core
+  counters aren't available.
+- **Registry + `GetSystemInfo`** (`sensors/identity.rs`) — `ProcessorNameString`,
+  `Identifier` (MIDR-derived: "Model 1" = 1st-gen Oryon/X1, "Model 2" = Oryon V3/X2),
+  `VendorIdentifier`, per-core `~MHz` (each core's cluster rated/boost clock — the same
+  value CPU-Z's "Original Processor Frequency" and HWiNFO read), and logical core count.
+- **Chip detection** (`sensors/chips.rs::match_profile`) is layered, since issue #2
+  showed some OEM firmware (Surface, Snapdragon X2 Elite) reports a bare marketing name
+  with no SKU token in it at all — token matching alone silently produced "Unknown X2
+  Elite SKU" for it every time:
+  1. Exact SKU token in the name (e.g. `X2E78100`) — used when present.
+  2. Family/subfamily from the name text ("X2 Elite", "X2 Elite Extreme", "X2 Plus", …),
+     or — if the name has no usable text — the registry `Identifier`'s Oryon generation
+     + a Qualcomm vendor check.
+  3. Within that family, the exact SKU inferred from real core count + real rated clock
+     (`~MHz`) — nearest-clock match within a tolerance, since every family+core-count
+     group's neighboring SKUs are ≥300 MHz apart. X2E-80-100 and X2E-84-100 publish
+     identical CPU-visible specs (same 4.7 GHz boost, cache, core split) and are
+     reported as one honest combined "X2E-80/84-100" label rather than a guess.
+  4. Family recognized but no SKU candidate fits (unreleased part): label the family
+     honestly with `boost_ghz` from the real measured clock — never "Generic".
+  5. Nothing Snapdragon-shaped: generic fallback.
+  Real P/E core counts from the OS topology query (below) override any static table
+  cluster split whenever they're available and consistent with the detected core count.
 - **Power** — not wired; confirmed unavailable from userspace (§3).
 - Emit a single `sensor-update` Tauri event each tick with the merged snapshot.
 - Strict real-only contract: any field with no real source is `None` → UI shows "—".
