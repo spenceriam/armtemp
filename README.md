@@ -14,7 +14,9 @@ ARMtemp reads real ACPI thermal-zone sensors and displays a single honest CPU te
 
 > This is a from-scratch native app ported from a Claude/Design-Component mockup (`docs/claude-design-output/`), which was a *simulated* Windows-desktop preview. All live data here is **real**; no readings are fabricated. See [`SENSORS.md`](./SENSORS.md) for the full sensor discovery report.
 
-(Placeholder for screenshot)
+<p align="center">
+  <img src="docs/screenshots/main-window.png" width="420" alt="ARMtemp main window">
+</p>
 
 ## Contents
 
@@ -36,7 +38,7 @@ ARMtemp reads real ACPI thermal-zone sensors and displays a single honest CPU te
 - Live system-tray icon showing the current CPU temperature, with a right-click menu
 - Overheat protection — notify, sleep, or shut down at a configurable threshold
 - Close-to-tray, start-with-Windows, °C/°F, dark/light theme
-- MSI + NSIS installers that upgrade an existing install in place (see [Updating](#updating))
+- A single NSIS installer that upgrades an existing install in place (see [Updating](#updating))
 
 **Honest limitations (firmware, not by choice):**
 - **Per-core temperatures** aren't exposed by any userspace surface on Snapdragon X — the firmware exposes ~17 valid *zone* temperatures, not one per core. Rather than guess which zone maps to which core, ARMtemp reports one CPU temperature (the hottest valid zone) and shows genuinely per-core *load* instead. True per-core temps would need a signed kernel driver or private Surface/Qualcomm SMF IOCTLs.
@@ -46,7 +48,29 @@ ARMtemp reads real ACPI thermal-zone sensors and displays a single honest CPU te
 
 ## Screenshots
 
-(Placeholder for screenshot)
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/main-window.png" width="260"><br><sub>Main window (Classic layout)</sub></td>
+    <td align="center"><img src="docs/screenshots/cards-view.png" width="260"><br><sub>Cards layout</sub></td>
+    <td align="center"><img src="docs/screenshots/dashboard-view.png" width="260"><br><sub>Dashboard layout</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/mini-mode.png" width="260"><br><sub>Mini mode</sub></td>
+    <td align="center"><img src="docs/screenshots/overheat-protection.png" width="260"><br><sub>Overheat protection</sub></td>
+    <td align="center"><img src="docs/screenshots/tray-icon.png" width="260"><br><sub>Live tray icon</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/settings-general.png" width="260"><br><sub>Settings — General</sub></td>
+    <td align="center"><img src="docs/screenshots/settings-display.png" width="260"><br><sub>Settings — Display</sub></td>
+    <td align="center"><img src="docs/screenshots/settings-notification-area.png" width="260"><br><sub>Settings — Notification Area</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/settings-taskbar.png" width="260"><br><sub>Settings — Windows Taskbar</sub></td>
+    <td align="center"><img src="docs/screenshots/about-dialog.png" width="260"><br><sub>About — detected processor</sub></td>
+    <td></td>
+  </tr>
+</table>
+
 ---
 
 ## How it reads sensors (the important part)
@@ -70,17 +94,19 @@ npm install
 # Dev mode (hot-reload frontend + native backend)
 npm run tauri dev
 
-# Production build -> native ARM64 .exe + MSI/NSIS installers
+# Production build -> native ARM64 .exe + NSIS installer
 npm run tauri build
 # Output: src-tauri/target/release/armtemp.exe
-#         src-tauri/target/release/bundle/{msi,nsis}/
+#         src-tauri/target/release/bundle/nsis/
 ```
 
 Output is a **native ARM64** (`AA64`) executable (~3.8 MB), no emulation.
 
 ### Updating
 
-Running a newer MSI or NSIS installer over an existing install **upgrades it in place** — no need to uninstall first. This works because the bundle identifier and product name stay constant across releases; don't mix installer families (installing the MSI over an NSIS-installed copy, or vice versa, won't detect the prior install). There is no in-app auto-updater yet — updates are manual, by re-running an installer.
+Running the setup.exe over an existing install **upgrades it in place** — no need to uninstall first; a newer version installs straight through with no prompts. Running it again over the **same** version offers Repair or Uninstall instead of reinstalling blindly. This works because the bundle identifier and product name stay constant across releases.
+
+As of 0.4.4, only the NSIS installer is shipped (the MSI has been dropped). Anyone still on an MSI-based install (0.4.3 or earlier) is migrated automatically and silently the next time they run the setup.exe — no separate uninstall step needed. There is no in-app auto-updater yet — updates are manual, by re-running the installer.
 
 Launching a second copy of the **same version** while one is already running shows an "already running" message instead of opening a duplicate window; a **different** version (e.g. a dev build) is allowed to run alongside it.
 
