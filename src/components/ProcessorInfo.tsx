@@ -13,12 +13,21 @@ interface Props {
 // (profile boost clock) and Throttle (live ACPI passive-limit status).
 export function ProcessorInfo({ snap, status }: Props) {
   const processorStr = snap?.chip_name ?? (status === "error" ? "Sensor unavailable" : "Detecting…");
-  const modelStr = snap ? [snap.chip_name, snap.chip_model].filter(Boolean).join(" ") : processorStr;
+  // "Unknown ... SKU" / "Generic" aren't real model numbers — prefixing
+  // `chip_name` in front of them read as broken ("Snapdragon X2 Elite
+  // Unknown X2 Elite SKU"). Show just the family name in that case; a real
+  // (even ambiguous, e.g. "X2E-80/84-100") model still gets the full string.
+  const isPlaceholderModel = !snap?.chip_model || /^unknown\b/i.test(snap.chip_model) || snap.chip_model === "Generic";
+  const modelStr = snap ? (isPlaceholderModel ? snap.chip_name : [snap.chip_name, snap.chip_model].join(" ")) : processorStr;
   const speedStr = snap?.clock_mhz != null ? `${(snap.clock_mhz / 1000).toFixed(2)} GHz` : "—";
   const baseStr = snap?.base_clock_mhz ? `${(snap.base_clock_mhz / 1000).toFixed(2)} GHz` : "—";
   const boostStr = snap?.max_clock_mhz ? `${(snap.max_clock_mhz / 1000).toFixed(2)} GHz` : "—";
   const lithographyStr = snap?.lithography || "—";
   const tdpStr = snap?.tdp_w != null ? `${snap.tdp_w} W` : "—";
+  // The machine's real CPUID-derived identity (registry `Identifier`, e.g.
+  // "ARMv8 (64-bit) Family 8 Model 2 Revision 201") — not a repeat of the
+  // marketing model string, which the Model field above already shows.
+  const cpuidStr = snap?.cpu_identifier || "—";
   // Live thermal-throttle indicator: any valid ACPI zone reporting an active
   // passive limit (< 100 %) means the firmware is throttling right now.
   const throttled = snap ? snap.zones.some((z) => z.throttled) : null;
@@ -38,7 +47,16 @@ export function ProcessorInfo({ snap, status }: Props) {
       <div className="groupbox">
         <span className="groupbox-legend">Processor Information</span>
         <div className="proc-grid">
-          <Field label="Model" value={modelStr} full />
+          <Field
+            label="Model"
+            value={modelStr}
+            full
+            title={
+              snap?.detection_basis && snap.detection_basis !== "exact SKU token in CPU name"
+                ? `Detection: ${snap.detection_basis}`
+                : undefined
+            }
+          />
           <Field label="Platform" value={snap?.platform ?? "—"} full />
           <Field label="Speed" value={speedStr} full />
           <Field label="Base" value={baseStr} />
@@ -50,7 +68,7 @@ export function ProcessorInfo({ snap, status }: Props) {
             valueColor={throttled ? "#e0473a" : undefined}
           />
           <Field label="TDP" value={tdpStr} full />
-          <Field label="CPUID" value={snap?.chip_model ?? "—"} full />
+          <Field label="CPUID" value={cpuidStr} full />
         </div>
       </div>
     </div>
@@ -62,11 +80,13 @@ function Field({
   value,
   full,
   valueColor,
+  title,
 }: {
   label: string;
   value: string;
   full?: boolean;
   valueColor?: string;
+  title?: string;
 }) {
   return (
     <>
@@ -74,6 +94,7 @@ function Field({
       <span
         className={`proc-field-value sunken ${full ? "full" : ""}`}
         style={valueColor ? { color: valueColor } : undefined}
+        title={title}
       >
         {value}
       </span>

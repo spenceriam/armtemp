@@ -121,7 +121,7 @@ Users can always override AI agent version decisions:
 - **Frontend**: React 18 with TypeScript, built with Vite, served in the Tauri WebView2
 - **Styling**: CSS custom properties drive theming (dark/light), tokens in `src/app/theme.ts`
 - **Backend**: Rust (Tauri 2), native ARM64 binary
-- **Sensors**: Real telemetry via the native Windows PDH API (ACPI thermal zones, per-core load, live CPU frequency); CPU identity via the registry + `GetSystemInfo`
+- **Sensors**: Real telemetry via the native Windows PDH API (ACPI thermal zones, per-core load, per-core-clock-derived Speed); CPU identity via the registry + `GetSystemInfo` (`sensors/identity.rs`), matched to a chip profile via layered detection in `sensors/chips.rs::match_profile` (SKU token → family/subfamily from name or Identifier → inferred SKU from core count + rated clock → honest family-only fallback → generic) — see `SENSORS.md` §6
 - **State Management**: React hooks (useState, useEffect, useCallback)
 - **Tray**: Exactly one tray icon, always (do NOT re-add the `app.trayIcon` block to `tauri.conf.json` — it duplicates the runtime-built icon). It always shows the single honest CPU temperature — there is no per-core sensor to drive a per-core/mode tray menu. The number is rendered with the native system font via GDI (`sensors/tray_render.rs`, Windows-only, behind a small `tray_icon_size()`/`render_number_rgba()` seam so a macOS menu-bar or Linux tray backend can implement the same two functions later).
 - **Settings Persistence**: Tauri store plugin (JSON in app data folder)
@@ -129,7 +129,7 @@ Users can always override AI agent version decisions:
 - `src/app/` - TypeScript types, theme tokens, hooks (useSettings, useSensors)
 - `src/components/` - React components (MenuBar, ProcessorInfo, TempTable, SettingsDialog, OverheatDialog, AboutDialog, MiniMode)
 - `src-tauri/src/` - Rust backend (lib.rs = app wiring, sensors/ = telemetry)
-- `src-tauri/src/sensors/` - Sensor providers (pdh.rs = primary, chips.rs = profiles, tray.rs = color/mode logic, tray_render.rs = Windows GDI digit rendering, types.rs = data shapes)
+- `src-tauri/src/sensors/` - Sensor providers (pdh.rs = primary, identity.rs = raw CPU identity signals from the registry/topology, chips.rs = profiles + detection, tray.rs = color/mode logic, tray_render.rs = Windows GDI digit rendering, types.rs = data shapes)
 - `tools/` - Phase 0 sensor probe scripts (PowerShell) + icon generator
 ## Real-data contract (CRITICAL)
 - **All telemetry must be REAL.** No simulated, random, or fallback values anywhere.
@@ -141,8 +141,8 @@ Users can always override AI agent version decisions:
 ## Main window layout structure
 The application displays all sensor information in a single window matching Core Temp's actual layout:
 1. **Native title bar** — the OS draws it (icon, title, minimize/close); the window is decorated and opaque (no custom chrome, no transparency/blur). Dark/light native chrome follows the app theme via `getCurrentWindow().setTheme()`.
-2. **Menu Bar** (`src/components/MenuBar.tsx`) — File (Exit) / Options (Settings, Overheat protection, Toggle Mini Mode, Always on top) / Tools (Refresh sensors) / Help (About ARMtemp). Rendered as themed HTML dropdowns (a native HMENU doesn't follow dark/light mode on Windows) styled to look like real Win32 menus. No unit toggle — Fahrenheit lives in Settings → Display. Launch flags `--settings` / `--overheat` / `--about` deep-link the dialogs.
-3. **Select CPU** row (combo + `[N] Core(s) [N] Thread(s)` sunken count boxes) + **Processor Information** group box (Win32 etched border, sunken read-only value fields): Model / Platform / Frequency / CPUID full rows; `Boost | Lithography` and `Throttle | TDP` pairs. VID and Revision are intentionally omitted (permanently unavailable on Snapdragon X); Throttle is the live ACPI passive-limit status (red "Yes" while the firmware throttles).
+2. **Menu Bar** (`src/components/MenuBar.tsx`) — File (Exit) / Options (Settings, Overheat protection, Toggle Mini Mode, Always on top) / Tools (Refresh sensors, Copy detection report) / Help (About ARMtemp). Rendered as themed HTML dropdowns (a native HMENU doesn't follow dark/light mode on Windows) styled to look like real Win32 menus. No unit toggle — Fahrenheit lives in Settings → Display. Launch flags `--settings` / `--overheat` / `--about` deep-link the dialogs. "Copy detection report" (`get_detection_report` command) copies a plain-text dump of every raw CPU identity signal plus how the chip was matched, for diagnosing misdetections on machines the maintainer doesn't own (see issue #2).
+3. **Select CPU** row (combo + `[N] Core(s) [N] Thread(s)` sunken count boxes) + **Processor Information** group box (Win32 etched border, sunken read-only value fields): Model / Platform / Frequency / CPUID full rows; `Boost | Lithography` and `Throttle | TDP` pairs. VID and Revision are intentionally omitted (permanently unavailable on Snapdragon X); Throttle is the live ACPI passive-limit status (red "Yes" while the firmware throttles). CPUID shows the real registry `Identifier` string (e.g. "ARMv8 (64-bit) Family 8 Model 2 Revision 201"), not a repeat of the Model field's marketing string.
 4. **Temperature Readings** group box — Tj. Max row, one **CPU Temp** row (Cur. | Min. | Max. | Avg., **colored temperature text** — the app's single honest CPU temperature), then per-core rows (Core # | Load | Min. | Max. | Avg., plain text — genuinely per-core).
 5. **Status Bar** — thin native strip with CPU Temp / Low / High (session, since app start).
 6. **Mini-mode** drops native decorations at runtime (`setDecorations(false)` + `setSize()`) for a compact always-on-top box, and restores them on exit — matches Core Temp's mini mode.

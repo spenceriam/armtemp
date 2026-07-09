@@ -98,6 +98,14 @@ pub struct SensorSnapshot {
     /// Package power in watts. Always `None` — confirmed unavailable from
     /// userspace on this firmware (see SENSORS.md §3).
     pub power_w: Option<f64>,
+    /// The registry `Identifier` string, e.g. "ARMv8 (64-bit) Family 8 Model 2
+    /// Revision 201" — the machine's real CPUID-derived identity, shown in
+    /// the UI's CPUID field instead of repeating the marketing model string.
+    pub cpu_identifier: Option<String>,
+    /// How `chip_name`/`chip_model` were determined — see `chips::MatchBasis`.
+    /// Surfaced so an inferred or unconfirmed SKU is never presented as if it
+    /// were read directly off the chip.
+    pub detection_basis: String,
     /// Monotonic tick counter so the UI can detect stale updates.
     pub tick: u64,
 }
@@ -123,6 +131,8 @@ impl Default for SensorSnapshot {
             max_clock_mhz: None,
             bus_speed_mhz: None,
             power_w: None,
+            cpu_identifier: None,
+            detection_basis: String::new(),
             tick: 0,
         }
     }

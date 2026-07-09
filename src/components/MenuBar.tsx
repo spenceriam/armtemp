@@ -9,6 +9,7 @@ interface MenuBarProps {
   onToggleMini: () => void;
   onToggleAlwaysOnTop: () => void;
   onRefresh: () => void;
+  onCopyDetectionReport: () => void;
   onExit: () => void;
 }
 
@@ -26,6 +27,7 @@ export function MenuBar({
   onToggleMini,
   onToggleAlwaysOnTop,
   onRefresh,
+  onCopyDetectionReport,
   onExit,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<MenuKey | null>(null);
@@ -109,6 +111,9 @@ export function MenuBar({
           <div className="menu-drop" role="menu">
             <button className="menu-entry" role="menuitem" onClick={() => run(onRefresh)}>
               Refresh sensors
+            </button>
+            <button className="menu-entry" role="menuitem" onClick={() => run(onCopyDetectionReport)}>
+              Copy detection report
             </button>
           </div>
         )}

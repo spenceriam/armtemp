@@ -1,5 +1,6 @@
 //! Sensor subsystem: real telemetry backends for Snapdragon X.
 pub mod chips;
+pub mod identity;
 pub mod pdh;
 pub mod tray;
 #[cfg(target_os = "windows")]
