@@ -66,8 +66,8 @@ export function AboutDialog({ onClose }: Props) {
           </div>
 
           <div className="about-disclosure">
-            Snapdragon X reports temperature for the processor as a whole, not per
-            individual core.
+            ARMtemp is a monitoring and hardware-detection tool — it does not benchmark,
+            stress-test, or rate processor performance.
           </div>
 
           <div className="groupbox dlg-group">

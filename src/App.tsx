@@ -100,6 +100,11 @@ export default function App() {
           onToggleMini={() => setMini((m) => !m)}
           onToggleAlwaysOnTop={() => update({ alwaysOnTop: !settings.alwaysOnTop })}
           onRefresh={() => invoke("refresh_now").catch(() => {})}
+          onCopyDetectionReport={() =>
+            invoke<string>("get_detection_report")
+              .then((text) => navigator.clipboard.writeText(text))
+              .catch(() => {})
+          }
           onExit={() => invoke("exit_app").catch(() => {})}
         />
 

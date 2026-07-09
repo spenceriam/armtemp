@@ -36,6 +36,8 @@ export interface SensorSnapshot {
   max_clock_mhz: number | null;
   bus_speed_mhz: number | null;
   power_w: number | null;
+  cpu_identifier: string | null;
+  detection_basis: string;
   tick: number;
 }
 
