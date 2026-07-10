@@ -18,6 +18,12 @@ pub struct CoreReading {
     pub index: u32,
     /// Core class label from the chip profile: "P" (Prime/Performance) or "E" (Efficiency).
     pub kind: CoreKind,
+    /// Display badge for this core's tier, per the chip's real vocabulary —
+    /// see `chips::ChipProfile::tier_badge`. Never hardcode "P"/"E" in the
+    /// frontend; use this instead (e.g. X1 is all "P", X2 is "P"/"P2").
+    pub kind_label: String,
+    /// Tooltip text for `kind_label`, e.g. "Prime core" / "Performance core".
+    pub kind_title: String,
     /// Utilization 0..=100, always real (perf counter).
     pub load: Option<f64>,
     /// Running minimum load seen since start (real only).

@@ -485,9 +485,13 @@ fn build_snapshot(
             entry.3 += 1;
         }
         let s = stats.get(&i);
+        let kind = kind_for_core(real_kinds, profile, i);
+        let (kind_label, kind_title) = profile.tier_badge(kind);
         cores_out.push(CoreReading {
             index: i,
-            kind: kind_for_core(real_kinds, profile, i),
+            kind,
+            kind_label: kind_label.to_string(),
+            kind_title: kind_title.to_string(),
             load,
             load_min: s.map(|s| s.0),
             load_max: s.map(|s| s.1),
@@ -561,7 +565,8 @@ fn format_detection_report(identity: &CpuIdentity, profile: &ChipProfile, basis:
          VendorIdentifier: {}\n\
          Logical cores: {}\n\
          Per-core ~MHz: {:?}\n\
-         Real P/E topology: {} performance / {} efficiency\n\
+         Rated clock from name: {}\n\
+         OS core tiers (EfficiencyClass, higher = faster): {} faster-tier / {} slower-tier\n\
          --- Matched profile ---\n\
          Name: {}\n\
          Model: {}\n\
@@ -573,6 +578,7 @@ fn format_detection_report(identity: &CpuIdentity, profile: &ChipProfile, basis:
         identity.vendor.as_deref().unwrap_or("(none)"),
         identity.logical_cores,
         identity.per_core_mhz,
+        identity.name_clock_mhz().map(|m| format!("{m} MHz")).unwrap_or_else(|| "(none)".to_string()),
         identity.perf_cores.map(|n| n.to_string()).unwrap_or_else(|| "?".to_string()),
         identity.eff_cores.map(|n| n.to_string()).unwrap_or_else(|| "?".to_string()),
         profile.name,

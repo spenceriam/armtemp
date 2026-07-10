@@ -84,8 +84,8 @@ function CoreRow({ c }: { c: CoreReading }) {
     <div className="temp-row">
       <div className="core-cell">
         <span>Core #{c.index}:</span>
-        <span className="kind-tag" title={c.kind === "efficiency" ? "Efficiency core" : "Performance core"}>
-          {c.kind === "efficiency" ? "E" : "P"}
+        <span className="kind-tag" title={c.kind_title}>
+          {c.kind_label}
         </span>
       </div>
       <LoadCell v={c.load} />

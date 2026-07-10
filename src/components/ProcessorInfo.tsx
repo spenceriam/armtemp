@@ -13,11 +13,11 @@ interface Props {
 // (profile boost clock) and Throttle (live ACPI passive-limit status).
 export function ProcessorInfo({ snap, status }: Props) {
   const processorStr = snap?.chip_name ?? (status === "error" ? "Sensor unavailable" : "Detecting…");
-  // "Unknown ... SKU" / "Generic" aren't real model numbers — prefixing
-  // `chip_name` in front of them read as broken ("Snapdragon X2 Elite
-  // Unknown X2 Elite SKU"). Show just the family name in that case; a real
-  // (even ambiguous, e.g. "X2E-80/84-100") model still gets the full string.
-  const isPlaceholderModel = !snap?.chip_model || /^unknown\b/i.test(snap.chip_model) || snap.chip_model === "Generic";
+  // "Unknown ... SKU" isn't a real model number — prefixing `chip_name` in
+  // front of it reads as broken ("Snapdragon X2 Elite Unknown X2 Elite
+  // SKU"). Show just the family name in that case; a real (even ambiguous,
+  // e.g. "X2E-80/84-100") model still gets the full string.
+  const isPlaceholderModel = !snap?.chip_model || /^unknown\b/i.test(snap.chip_model);
   const modelStr = snap ? (isPlaceholderModel ? snap.chip_name : [snap.chip_name, snap.chip_model].join(" ")) : processorStr;
   const speedStr = snap?.clock_mhz != null ? `${(snap.clock_mhz / 1000).toFixed(2)} GHz` : "—";
   const baseStr = snap?.base_clock_mhz ? `${(snap.base_clock_mhz / 1000).toFixed(2)} GHz` : "—";
@@ -88,13 +88,18 @@ function Field({
   valueColor?: string;
   title?: string;
 }) {
+  // Sunken fields visually truncate long values (e.g. CPUID's registry
+  // Identifier string). Default the hover tooltip to the value itself so the
+  // full text is always available on hover, with zero layout/UI change;
+  // callers with something more useful to say (e.g. Model's detection basis)
+  // pass an explicit `title` that takes precedence.
   return (
     <>
       <span className="proc-field-label">{label}:</span>
       <span
         className={`proc-field-value sunken ${full ? "full" : ""}`}
         style={valueColor ? { color: valueColor } : undefined}
-        title={title}
+        title={title ?? value}
       >
         {value}
       </span>
