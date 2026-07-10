@@ -1,9 +1,11 @@
 import { SensorSnapshot } from "../app/types";
 import { SensorStatus } from "../app/useSensors";
+import { formatTemp } from "../app/theme";
 
 interface Props {
   snap: SensorSnapshot | null;
   status: SensorStatus;
+  unit: "C" | "F";
 }
 
 // The Core Temp "Processor Information" group box: Select CPU combo + a dense
@@ -11,13 +13,13 @@ interface Props {
 // Revision (permanently unavailable on Snapdragon X — no userspace surface)
 // are intentionally omitted in favor of fields with live/spec data: Boost
 // (profile boost clock) and Throttle (live ACPI passive-limit status).
-export function ProcessorInfo({ snap, status }: Props) {
+export function ProcessorInfo({ snap, status, unit }: Props) {
   const processorStr = snap?.chip_name ?? (status === "error" ? "Sensor unavailable" : "Detecting…");
-  // "Unknown ... SKU" / "Generic" aren't real model numbers — prefixing
-  // `chip_name` in front of them read as broken ("Snapdragon X2 Elite
-  // Unknown X2 Elite SKU"). Show just the family name in that case; a real
-  // (even ambiguous, e.g. "X2E-80/84-100") model still gets the full string.
-  const isPlaceholderModel = !snap?.chip_model || /^unknown\b/i.test(snap.chip_model) || snap.chip_model === "Generic";
+  // "Unknown ... SKU" isn't a real model number — prefixing `chip_name` in
+  // front of it reads as broken ("Snapdragon X2 Elite Unknown X2 Elite
+  // SKU"). Show just the family name in that case; a real (even ambiguous,
+  // e.g. "X2E-80/84-100") model still gets the full string.
+  const isPlaceholderModel = !snap?.chip_model || /^unknown\b/i.test(snap.chip_model);
   const modelStr = snap ? (isPlaceholderModel ? snap.chip_name : [snap.chip_name, snap.chip_model].join(" ")) : processorStr;
   const speedStr = snap?.clock_mhz != null ? `${(snap.clock_mhz / 1000).toFixed(2)} GHz` : "—";
   const baseStr = snap?.base_clock_mhz ? `${(snap.base_clock_mhz / 1000).toFixed(2)} GHz` : "—";
@@ -67,7 +69,12 @@ export function ProcessorInfo({ snap, status }: Props) {
             value={throttled === null ? "—" : throttled ? "Yes" : "No"}
             valueColor={throttled ? "#e0473a" : undefined}
           />
-          <Field label="TDP" value={tdpStr} full />
+          <Field label="TDP" value={tdpStr} />
+          <Field
+            label="Tj. Max"
+            value={snap ? formatTemp(snap.tjmax_c, unit) : "—"}
+            title="Thermal junction maximum — the manufacturer's maximum safe die temperature"
+          />
           <Field label="CPUID" value={cpuidStr} full />
         </div>
       </div>
@@ -88,13 +95,18 @@ function Field({
   valueColor?: string;
   title?: string;
 }) {
+  // Sunken fields visually truncate long values (e.g. CPUID's registry
+  // Identifier string). Default the hover tooltip to the value itself so the
+  // full text is always available on hover, with zero layout/UI change;
+  // callers with something more useful to say (e.g. Model's detection basis)
+  // pass an explicit `title` that takes precedence.
   return (
     <>
       <span className="proc-field-label">{label}:</span>
       <span
         className={`proc-field-value sunken ${full ? "full" : ""}`}
         style={valueColor ? { color: valueColor } : undefined}
-        title={title}
+        title={title ?? value}
       >
         {value}
       </span>

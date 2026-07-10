@@ -113,7 +113,7 @@ export default function App() {
             <MiniMode snap={snap} unit={unit} colorCode={settings.colorCodeTemps} />
           ) : (
             <>
-              <ProcessorInfo snap={snap} status={sensorStatus} />
+              <ProcessorInfo snap={snap} status={sensorStatus} unit={unit} />
 
               {/* Layout switch — Classic (default) is the CoreTemp table. */}
               {settings.uiStyle === "classic" && (

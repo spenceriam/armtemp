@@ -1,8 +1,8 @@
 [package]
 name = "armtemp"
-version = "0.4.5"
+version = "0.4.6"
 description = "Native Snapdragon X / X2 temperature monitor for Windows on ARM"
-authors = ["Spencer Francisco"]
+authors = ["pocAgent LLC"]
 edition = "2021"
 rust-version = "1.77"
 

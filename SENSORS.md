@@ -167,12 +167,37 @@ failure described in §7.
      reported as one honest combined "X2E-80/84-100" label rather than a guess.
   4. Family recognized but no SKU candidate fits (unreleased part): label the family
      honestly with `boost_ghz` from the real measured clock — never "Generic".
-  5. Nothing Snapdragon-shaped: generic fallback.
+  5. A known non-Snapdragon-X vendor/family (legacy Qualcomm Kryo chips — Snapdragon
+     835/850/7c family/8c family/8cx family, Microsoft SQ1-3; Broadcom; MediaTek;
+     NVIDIA) but no specific SKU token matched: honest vendor/family label, never an
+     invented spec.
+  6. Nothing recognized at all: the real `VendorIdentifier` (e.g. "Broadcom CPU") or
+     bare "ARM64 CPU" — never "Snapdragon Generic" for a chip that isn't one.
   Real P/E core counts from the OS topology query (below) override any static table
   cluster split whenever they're available and consistent with the detected core count.
+- **Core-tier vocabulary** (`ChipProfile::tier_badge`, used for every per-core "P"/"E"
+  badge in the UI): the label depends on the real silicon, not a one-size-fits-all
+  Performance/Efficiency split.
+  - **Snapdragon X1 family**: every core badges **"P"** ("Performance core") — X1 has no
+    efficiency tier at all. All cores are identical Oryon cores; the two clusters differ
+    only in clock cap (confirmed via `GetLogicalProcessorInformationEx`'s `EfficiencyClass`
+    on this dev machine, X1P-64-100: 4 cores capped at 2976 MHz report `EfficiencyClass=0`,
+    6 cores at 3418 MHz report `EfficiencyClass=1` — real data, but "Efficiency" is the
+    wrong noun for a chip with no efficiency cores).
+  - **Snapdragon X2 family**: badges **"P"**/**"P2"**, tooltips "Prime core"/"Performance
+    core" — Qualcomm's own X2 vocabulary; still no "Efficiency" cluster name.
+  - **Legacy Kryo-based Qualcomm chips** (835/850/7c/8c/8cx families, Microsoft SQ1-3),
+    and any other genuinely hybrid/unrecognized ARM64 chip: badges **"P"**/**"E"** — this
+    *is* accurate vocabulary for those, since they're real big.LITTLE designs (e.g.
+    Kryo "Gold"/"Silver", or Cortex-X1C/A78C on 8cx Gen 3 / SQ3).
 - **Power** — not wired; confirmed unavailable from userspace (§3).
 - Emit a single `sensor-update` Tauri event each tick with the merged snapshot.
-- Strict real-only contract: any field with no real source is `None` → UI shows "—".
+- Strict real-only contract: any field with no real source is `None` → UI shows "—". This
+  matters more now that detection covers non-Qualcomm boards (Raspberry Pi under
+  Windows-on-ARM, etc.): the `Thermal Zone Information` PDH object this app relies on for
+  temperature is Qualcomm/Surface-firmware-specific (§1) and may simply not exist on other
+  vendors' boards — package temperature (and TDP/lithography where unpublished) degrade to
+  an honest "—" there rather than fabricating a reading.
 
 ---
 

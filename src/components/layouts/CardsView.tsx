@@ -24,8 +24,8 @@ function CoreCard({ c }: { c: CoreReading }) {
     <div className="card core-card">
       <div className="core-card-head">
         <span className="mono dim">#{c.index}</span>
-        <span className="kind-chip" title={c.kind === "efficiency" ? "Efficiency core" : "Performance core"}>
-          {c.kind === "efficiency" ? "E" : "P"}
+        <span className="kind-chip" title={c.kind_title}>
+          {c.kind_label}
         </span>
       </div>
       <div className="core-card-temp">{formatLoad(c.load)}</div>

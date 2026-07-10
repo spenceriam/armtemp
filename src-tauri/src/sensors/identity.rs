@@ -47,6 +47,33 @@ impl CpuIdentity {
         self.per_core_mhz.iter().copied().max()
     }
 
+    /// Rated clock embedded in `ProcessorNameString`, e.g. "@ 4.03 GHz" ->
+    /// Some(4030). Parsed from the RAW name — `normalized_name()` strips the
+    /// '.'/'@' this needs. Issue #2: some OEM firmware reports boot-time
+    /// cluster clocks via per-core `~MHz`, not the rated boost, so this is a
+    /// second, independent clock signal `infer_within_family` can fall back
+    /// to (or prefer).
+    pub fn name_clock_mhz(&self) -> Option<u32> {
+        let lower = self.name_lower();
+        let unit_pos = [lower.rfind("ghz"), lower.rfind("mhz")].into_iter().flatten().max()?;
+        let is_ghz = lower[unit_pos..].starts_with("ghz");
+        let digits: String = lower[..unit_pos]
+            .trim_end()
+            .chars()
+            .rev()
+            .take_while(|c| c.is_ascii_digit() || *c == '.')
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        if digits.is_empty() {
+            return None;
+        }
+        let value: f64 = digits.parse().ok()?;
+        let mhz = if is_ghz { (value * 1000.0).round() } else { value.round() } as u32;
+        (500..=8000).contains(&mhz).then_some(mhz)
+    }
+
     /// MIDR part number decoded from `Identifier`'s "Model <hex>" token.
     /// `None` if `identifier` is absent or doesn't parse. `1` = Oryon (X1
     /// family), `2` = Oryon V3 (X2 family) — see the Linux kernel's
@@ -185,5 +212,36 @@ mod tests {
         let mut id = CpuIdentity::default();
         id.name = Some("Snapdragon(R) X2 Elite - X2E-78-100".into());
         assert_eq!(id.normalized_name(), "snapdragonrx2elitex2e78100");
+    }
+
+    #[test]
+    fn name_clock_mhz_parses_x2_bare_marketing_name() {
+        let mut id = CpuIdentity::default();
+        id.name = Some("Snapdragon X2 Elite @ 4.03 GHz".into());
+        assert_eq!(id.name_clock_mhz(), Some(4030));
+    }
+
+    #[test]
+    fn name_clock_mhz_ignores_sku_digits_and_reads_trailing_clock() {
+        let mut id = CpuIdentity::default();
+        id.name = Some("Snapdragon(R) X Elite - X1E-78-100 - Qualcomm(R) Oryon(TM) CPU @ 3.40 GHz".into());
+        assert_eq!(id.name_clock_mhz(), Some(3400));
+    }
+
+    #[test]
+    fn name_clock_mhz_parses_mhz_unit() {
+        let mut id = CpuIdentity::default();
+        id.name = Some("Snapdragon X Plus - X1P64100 @ 3400 MHz".into());
+        assert_eq!(id.name_clock_mhz(), Some(3400));
+    }
+
+    #[test]
+    fn name_clock_mhz_none_when_absent_or_garbage() {
+        let mut id = CpuIdentity::default();
+        assert_eq!(id.name_clock_mhz(), None);
+        id.name = Some("Snapdragon X2 Elite".into());
+        assert_eq!(id.name_clock_mhz(), None);
+        id.name = Some("Snapdragon X2 Elite @ GHz".into());
+        assert_eq!(id.name_clock_mhz(), None);
     }
 }

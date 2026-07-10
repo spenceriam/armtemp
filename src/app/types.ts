@@ -5,6 +5,12 @@ export type CoreKind = "performance" | "efficiency";
 export interface CoreReading {
   index: number;
   kind: CoreKind;
+  // Display badge/tooltip for this core's tier, per the detected chip's real
+  // vocabulary (e.g. X1 is all "P"/"Performance core"; X2 is "P"/"Prime core"
+  // vs "P2"/"Performance core"). Always use these instead of deriving a
+  // label from `kind` directly.
+  kind_label: string;
+  kind_title: string;
   load: number | null;
   load_min: number | null;
   load_max: number | null;

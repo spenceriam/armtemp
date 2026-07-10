@@ -12,9 +12,11 @@ interface Props {
   cpuAvg: number | null;
 }
 
-// The Core Temp "Temperature Readings" group box: Tj. Max row, one CPU Temp
-// row (the single honest CPU temperature — Snapdragon X exposes no per-core
-// thermal sensor), and per-core Load rows (genuinely per-core). No new
+// The Core Temp "Temperature Readings" group box: one CPU Temp row (the
+// single honest CPU temperature — Snapdragon X exposes no per-core thermal
+// sensor) — live current (unlabeled first column, matches the tray icon)
+// plus session Min/Max/Avg — and per-core Load rows (genuinely per-core).
+// Tj.Max is a spec constant, shown in Processor Information instead. No new
 // colors are introduced: the CPU Temp row uses the existing temperature
 // color scale; load cells stay plain text.
 export function TempTable({ cores, tjmax, unit, colorCode, cpuTemp, cpuMin, cpuMax, cpuAvg }: Props) {
@@ -22,17 +24,9 @@ export function TempTable({ cores, tjmax, unit, colorCode, cpuTemp, cpuMin, cpuM
     <div className="groupbox temp-groupbox">
       <span className="groupbox-legend">Processor #0: Temperature Readings</span>
       <div className="temp-table">
-        {/* Tj. Max row doubles as a header cell, like real Core Temp. */}
-        <div className="temp-row">
-          <div className="core-cell">Tj. Max:</div>
-          <div className="tcell sunken mono">{tjmax}°C</div>
-          <div />
-          <div />
-          <div />
-        </div>
         <div className="temp-row">
           <div />
-          <div className="thead">Cur.</div>
+          <div className="thead" />
           <div className="thead">Min.</div>
           <div className="thead">Max.</div>
           <div className="thead">Avg.</div>
@@ -84,8 +78,8 @@ function CoreRow({ c }: { c: CoreReading }) {
     <div className="temp-row">
       <div className="core-cell">
         <span>Core #{c.index}:</span>
-        <span className="kind-tag" title={c.kind === "efficiency" ? "Efficiency core" : "Performance core"}>
-          {c.kind === "efficiency" ? "E" : "P"}
+        <span className="kind-tag" title={c.kind_title}>
+          {c.kind_label}
         </span>
       </div>
       <LoadCell v={c.load} />
