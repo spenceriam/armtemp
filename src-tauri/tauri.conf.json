@@ -43,7 +43,7 @@
     "category": "Utility",
     "shortDescription": "Snapdragon X temperature monitor",
     "longDescription": "ARMtemp is a native temperature monitor for Snapdragon X, X Plus, X Elite, X2 Plus and X2 Elite processors on Windows on ARM, reading real on-die thermal sensors.",
-    "publisher": "Spencer Francisco",
+    "publisher": "pocAgent LLC",
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
