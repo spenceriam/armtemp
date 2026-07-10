@@ -122,7 +122,6 @@ export default function App() {
                   tjmax={tjmax}
                   unit={unit}
                   colorCode={settings.colorCodeTemps}
-                  cpuTemp={snap?.package_c ?? null}
                   cpuMin={snap?.package_min_c ?? null}
                   cpuMax={snap?.package_max_c ?? null}
                   cpuAvg={snap?.package_avg_c ?? null}
