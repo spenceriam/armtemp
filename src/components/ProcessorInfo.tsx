@@ -1,9 +1,11 @@
 import { SensorSnapshot } from "../app/types";
 import { SensorStatus } from "../app/useSensors";
+import { formatTemp } from "../app/theme";
 
 interface Props {
   snap: SensorSnapshot | null;
   status: SensorStatus;
+  unit: "C" | "F";
 }
 
 // The Core Temp "Processor Information" group box: Select CPU combo + a dense
@@ -11,7 +13,7 @@ interface Props {
 // Revision (permanently unavailable on Snapdragon X — no userspace surface)
 // are intentionally omitted in favor of fields with live/spec data: Boost
 // (profile boost clock) and Throttle (live ACPI passive-limit status).
-export function ProcessorInfo({ snap, status }: Props) {
+export function ProcessorInfo({ snap, status, unit }: Props) {
   const processorStr = snap?.chip_name ?? (status === "error" ? "Sensor unavailable" : "Detecting…");
   // "Unknown ... SKU" isn't a real model number — prefixing `chip_name` in
   // front of it reads as broken ("Snapdragon X2 Elite Unknown X2 Elite
@@ -67,7 +69,12 @@ export function ProcessorInfo({ snap, status }: Props) {
             value={throttled === null ? "—" : throttled ? "Yes" : "No"}
             valueColor={throttled ? "#e0473a" : undefined}
           />
-          <Field label="TDP" value={tdpStr} full />
+          <Field label="TDP" value={tdpStr} />
+          <Field
+            label="Tj. Max"
+            value={snap ? formatTemp(snap.tjmax_c, unit) : "—"}
+            title="Thermal junction maximum — the manufacturer's maximum safe die temperature"
+          />
           <Field label="CPUID" value={cpuidStr} full />
         </div>
       </div>

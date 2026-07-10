@@ -6,6 +6,7 @@ interface Props {
   tjmax: number;
   unit: "C" | "F";
   colorCode: boolean;
+  cpuTemp: number | null;
   cpuMin: number | null;
   cpuMax: number | null;
   cpuAvg: number | null;
@@ -13,31 +14,29 @@ interface Props {
 
 // The Core Temp "Temperature Readings" group box: one CPU Temp row (the
 // single honest CPU temperature — Snapdragon X exposes no per-core thermal
-// sensor) showing session Avg/Min/Max plus the spec Tj.Max, and per-core
-// Load rows (genuinely per-core). No new colors are introduced: the CPU
-// Temp row uses the existing temperature color scale; load cells stay
-// plain text. The live "current" reading is shown elsewhere (status bar,
-// tray, taskbar badge) — this table is the session-summary view.
-export function TempTable({ cores, tjmax, unit, colorCode, cpuMin, cpuMax, cpuAvg }: Props) {
+// sensor) — live current (unlabeled first column, matches the tray icon)
+// plus session Min/Max/Avg — and per-core Load rows (genuinely per-core).
+// Tj.Max is a spec constant, shown in Processor Information instead. No new
+// colors are introduced: the CPU Temp row uses the existing temperature
+// color scale; load cells stay plain text.
+export function TempTable({ cores, tjmax, unit, colorCode, cpuTemp, cpuMin, cpuMax, cpuAvg }: Props) {
   return (
     <div className="groupbox temp-groupbox">
       <span className="groupbox-legend">Processor #0: Temperature Readings</span>
       <div className="temp-table">
         <div className="temp-row">
           <div />
-          <div className="thead">Avg.</div>
+          <div className="thead" />
           <div className="thead">Min.</div>
           <div className="thead">Max.</div>
-          <div className="thead" title="Thermal junction maximum — the manufacturer's maximum safe die temperature">
-            Tj. Max
-          </div>
+          <div className="thead">Avg.</div>
         </div>
         <div className="temp-row">
           <div className="core-cell">CPU Temp:</div>
-          <TempCell v={cpuAvg} tjmax={tjmax} unit={unit} colorCode={colorCode} />
+          <TempCell v={cpuTemp} tjmax={tjmax} unit={unit} colorCode={colorCode} />
           <TempCell v={cpuMin} tjmax={tjmax} unit={unit} colorCode={colorCode} />
           <TempCell v={cpuMax} tjmax={tjmax} unit={unit} colorCode={colorCode} />
-          <div className="tcell sunken mono">{formatTemp(tjmax, unit)}</div>
+          <TempCell v={cpuAvg} tjmax={tjmax} unit={unit} colorCode={colorCode} />
         </div>
         <div className="temp-divider" />
         <div className="temp-row">
